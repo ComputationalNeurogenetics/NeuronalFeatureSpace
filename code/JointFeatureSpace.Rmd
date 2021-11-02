@@ -1,30 +1,45 @@
 ---
-title: "R Notebook of studies into defining joint neuronal scATAC feature space for mouse CNS tissues E12-E15"
-output: html_notebook
+title: R Notebook of studies into defining joint neuronal scATAC feature space for
+  mouse CNS tissues E12-E15
+output:  html_notebook
 ---
 
 ```{r Libraries, include=FALSE}
-load.libs <- c(
-  "Signac",
-  "tidyverse",
-  "dplyr",
-  "BSgenome.Mmusculus.UCSC.mm10",
-  "RColorBrewer",
-  "future",
-  "GenomicRanges",
-  "EnsDb.Mmusculus.v79",
-  "dendextend",
-  "Seurat",
-  "DT")
-if (!require("pacman")) install.packages("pacman"); library(pacman)
-p_load(load.libs, update = FALSE, character.only = TRUE)
-status <- sapply(load.libs,require,character.only = TRUE)
-if(all(status)){
-    print("SUCCESS: You have successfully installed and loaded all required libraries.")
-} else{
-    cat("ERROR: One or more libraries failed to install correctly. Check the following list for FALSE cases and try again...\n\n")
-    status
-}
+# load.libs <- c(
+#   "Signac",
+#   "tidyverse",
+#   "dplyr",
+#   "BSgenome.Mmusculus.UCSC.mm10",
+#   "RColorBrewer",
+#   "future",
+#   "GenomicRanges",
+#   "EnsDb.Mmusculus.v79",
+#   "dendextend",
+#   "Seurat",
+#   "DT")
+library(Seurat)
+library(Signac)
+library(tidyverse)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(RColorBrewer)
+library(future)
+library(GenomicRanges)
+library(EnsDb.Mmusculus.v79)
+library(dendextend)
+library(DT)
+library(BiocManager)
+library(ChIPpeakAnno)
+# if (!require("pacman")) install.packages("pacman"); library(pacman)
+# p_load(load.libs, update = FALSE, character.only = TRUE, install=FALSE)
+# status <- sapply(load.libs,require,character.only = TRUE)
+# if(all(status)){
+#     print("SUCCESS: You have successfully installed and loaded all required libraries.")
+# } else{
+#     cat("ERROR: One or more libraries failed to install correctly. Check the following list for FALSE cases and try again...\n\n")
+#     status
+# }
+
+
 
 source("../../generic code/AuxFunctions.R")
 ```
@@ -36,9 +51,10 @@ plan("multisession", workers = 6)
 
 ```{r Path to raw data}
 raw.path <- "/Volumes/ExtSSD/ExtraWorkspace/"
-run.date <- "221021"
+run.date <- "281021"
 set.seed(2021)
 ```
+# Defining joint feature space
 
 ```{r Reading in Seurat object from each separate sample}
 # These already contain merged technical replicates, read count over 5kbp binned mm10 genome
@@ -267,15 +283,16 @@ clade.peaks
 ```
 
 ```{r Store clade peaks for further use}
-saveRDS(clade.peaks,paste("../scATAC_data/",sample.name,".clade.peaks.h8.",run.date,".Rds",sep=""))
+saveRDS(clade.peaks,paste("joint.clade.peaks.h8.",run.date,".Rds",sep=""))
 ```
 
-## Looking for correspondence between joint feature space and separate ones
+# Looking for correspondence between joint feature space and separate ones
 
 ```{r Loading separately generated feature spaces}
 clade.peaks.di <- readRDS("../../e14di1/scATAC_data/clade.peaks.Rds")
 clade.peaks.e12r1 <- readRDS("../../E12R1/scATAC_data/clade.peaks.191021.Rds")
 clade.peaks.e14vmb1 <- readRDS("../../e14vmb1/scATAC_data/clade.peaks.Rds")
+clade.peaks.e14vr1 <- readRDS("../../e14vR1/code/E14_R1.021121.cladepeaks.Rds")
 ```
 
 ```{r}
@@ -295,9 +312,31 @@ hits <- findOverlaps(clade.peaks, clade.peaks.di)
 overlaps <- pintersect(clade.peaks[queryHits(hits)], clade.peaks.di[subjectHits(hits)])
 percentOverlap <- width(overlaps) / width(clade.peaks.di[subjectHits(hits)])
 hist(percentOverlap, main = "Hist. of E14di separate feature space feature overlaps with the joint one")
+hits <- hits[percentOverlap > 0.8]
 ```
 
-However, larger space pretty much includes the separate one with very high overlaps between features. I etremely positively surprised by this. Result is very good and encouraging. The fact that joint feature space is 2x of separately defined one is perfectly ok, and kind of assumed as well. When joint feature space is used for any individual sample these extra features do not matter, they will filter away if sample in question does not have reads for them. This still does not answer to the question of optimal cut height, but at least this level 8 does look quite good.
+```{r}
+hits <- findOverlaps(clade.peaks.di, clade.peaks)
+overlaps <- pintersect(clade.peaks.di[queryHits(hits)], clade.peaks[subjectHits(hits)])
+percentOverlap <- width(overlaps) / width(clade.peaks[subjectHits(hits)])
+hist(percentOverlap, main = "Hist. of joint features space feature overlaps with the E14DI separate one")
+```
+
+However, larger space pretty much includes the separate one with very high overlaps between features. I am extremely positively surprised by this. Result is very good and encouraging. The fact that joint feature space is 2x of separately defined one is perfectly ok, and kind of assumed as well. When joint feature space is used for any individual sample these extra features do not matter, they will filter away if sample in question does not have reads for them. This still does not answer to the question of optimal cut height, but at least this level 8 does look quite good.
+
+```{r VENN diagram Joint vs E14DI vs E14vMB}
+makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.di, clade.peaks.e14vmb1), NameOfPeaks = c("Joint space","E14DI", "E14vMB"), minoverlap = 100)
+```
+
+```{r VENN diagram of E12R1 vs E14R1 vs joint space}
+makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.e14vr1, clade.peaks.e12r1), NameOfPeaks = c("Joint space","E14vR1","E12R1"), minoverlap = 100)
+```
+
+
+```{r VENN diagram with all comparisons}
+makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.di, clade.peaks.e14vmb1, clade.peaks.e12r1,clade.peaks.e14vr1), NameOfPeaks = c("Joint space","E14DI", "E14vMB","E12R1","E14vR1"), minoverlap = 100)
+```
+
 
 ```{r Env info}
 sessionInfo()
