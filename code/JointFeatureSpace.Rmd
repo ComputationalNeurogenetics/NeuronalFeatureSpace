@@ -5,18 +5,6 @@ output:  html_notebook
 ---
 
 ```{r Libraries, include=FALSE}
-# load.libs <- c(
-#   "Signac",
-#   "tidyverse",
-#   "dplyr",
-#   "BSgenome.Mmusculus.UCSC.mm10",
-#   "RColorBrewer",
-#   "future",
-#   "GenomicRanges",
-#   "EnsDb.Mmusculus.v79",
-#   "dendextend",
-#   "Seurat",
-#   "DT")
 library(Seurat)
 library(Signac)
 library(tidyverse)
@@ -29,17 +17,6 @@ library(dendextend)
 library(DT)
 library(BiocManager)
 library(ChIPpeakAnno)
-# if (!require("pacman")) install.packages("pacman"); library(pacman)
-# p_load(load.libs, update = FALSE, character.only = TRUE, install=FALSE)
-# status <- sapply(load.libs,require,character.only = TRUE)
-# if(all(status)){
-#     print("SUCCESS: You have successfully installed and loaded all required libraries.")
-# } else{
-#     cat("ERROR: One or more libraries failed to install correctly. Check the following list for FALSE cases and try again...\n\n")
-#     status
-# }
-
-
 
 source("../../generic code/AuxFunctions.R")
 ```
@@ -54,6 +31,7 @@ raw.path <- "/Volumes/ExtSSD/ExtraWorkspace/"
 run.date <- "281021"
 set.seed(2021)
 ```
+
 # Defining joint feature space
 
 ```{r Reading in Seurat object from each separate sample}
