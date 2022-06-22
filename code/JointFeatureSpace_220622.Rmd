@@ -265,7 +265,7 @@ clade.peaks
 ```
 
 ```{r Store clade peaks for further use}
-saveRDS(clade.peaks,paste("joint.clade.peaks.h8.",run.date,".Rds",sep=""))
+saveRDS(clade.peaks,paste("../analysis/joint.clade.peaks.",run.date,".Rds",sep=""))
 ```
 
 # Looking for correspondence between joint feature space and separate ones
@@ -289,22 +289,20 @@ clade.peaks.di
 
 Vs. for example 287 587 features in separately defined E14Di feature space.
 
-```{r Find hits between join and DI space}
+```{r Hist. of E14di separate feature space feature overlaps with the joint one}
 hits <- findOverlaps(clade.peaks, clade.peaks.di)
 overlaps <- pintersect(clade.peaks[queryHits(hits)], clade.peaks.di[subjectHits(hits)])
 percentOverlap <- width(overlaps) / width(clade.peaks.di[subjectHits(hits)])
-hist(percentOverlap, main = "Hist. of E14di separate feature space feature overlaps with the joint one")
-hits <- hits[percentOverlap > 0.8]
+ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="black", fill=pal_jco()(6)[6]) + theme_minimal() + xlab("Overlap proportion") + ggtitle("Hist. of E14di separate feature space feature overlaps with the joint one")
+#hits <- hits[percentOverlap > 0.8]
 ```
 
-```{r}
+```{r Hist. of joint feature space feature overlaps with the E14DI separate one}
 hits <- findOverlaps(clade.peaks.di, clade.peaks)
 overlaps <- pintersect(clade.peaks.di[queryHits(hits)], clade.peaks[subjectHits(hits)])
 percentOverlap <- width(overlaps) / width(clade.peaks[subjectHits(hits)])
-hist(percentOverlap, main = "Hist. of joint features space feature overlaps with the E14DI separate one")
+ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="black", fill=pal_jco()(6)[6]) + theme_minimal() + xlab("Overlap proportion") + ggtitle("Hist. of joint feature space feature overlaps with the E14DI separate one")
 ```
-
-However, larger space pretty much includes the separate one with very high overlaps between features. I am extremely positively surprised by this. Result is very good and encouraging. The fact that joint feature space is 2x of separately defined one is perfectly ok, and kind of assumed as well. When joint feature space is used for any individual sample these extra features do not matter, they will filter away if sample in question does not have reads for them. This still does not answer to the question of optimal cut height, but at least this level 8 does look quite good.
 
 ```{r VENN diagram Joint vs E14DI vs E14vMB}
 makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.di, clade.peaks.e14vmb1), NameOfPeaks = c("Joint space","E14DI", "E14vMB"), minoverlap = 100)
