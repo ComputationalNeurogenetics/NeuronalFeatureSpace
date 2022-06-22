@@ -21,7 +21,7 @@ source("../../generic code/AuxFunctions.R")
 ```{r Setting multicore/multisession}
 options(parallelly.makeNodePSOCK.setup_strategy = "sequential", future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE)
 plan("multisession", workers = 6)
-```
+```   
 
 ```{r Setting sample variables}
 sample.name <- "E14vMB"
@@ -30,7 +30,6 @@ raw.path <- "/Volumes/VarastoPool/University_research_data/Data/e14vmb1_data/scA
 ```
 
 ```{r Read cell-level information and fragments files}
-
 repl0.0.singlecell <- read_csv(file = paste(raw.path,sample.name,"_0/outs/singlecell.csv", sep=""))
 
 repl1.1.singlecell <- read_csv(file = paste(raw.path,sample.name,"_1/outs/singlecell.csv", sep=""))

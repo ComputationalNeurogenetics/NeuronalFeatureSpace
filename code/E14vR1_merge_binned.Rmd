@@ -26,11 +26,10 @@ plan("multisession", workers = 6)
 ```{r Setting sample variables}
 sample.name <- "E14vR1"
 run.date <- format(Sys.time(), "%d%m%y")
-raw.path <- "/Volumes/VarastoPool/University_research_data/Data/e14r1_data/scATAC/"
+raw.path <- "/Volumes/VarastoPool/University_research_data/Data/e14vr1_data/scATAC/"
 ```
 
 ```{r Read cell-level information and fragments files}
-
 repl0.0.singlecell <- read_csv(file = paste(raw.path,sample.name,"_0/outs/singlecell.csv", sep=""))
 
 repl1.1.singlecell <- read_csv(file = paste(raw.path,sample.name,"_1/outs/singlecell.csv", sep=""))
