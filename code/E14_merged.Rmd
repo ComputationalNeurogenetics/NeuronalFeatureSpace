@@ -1,0 +1,69 @@
+---
+title: "R Notebook of testing all E14 merging"
+output: html_notebook
+---
+
+```{r}
+library(Seurat)
+library(Signac)
+library(tidyverse)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(RColorBrewer)
+library(future)
+library(GenomicRanges)
+library(EnsDb.Mmusculus.v79)
+library(dendextend)
+library(DT)
+library(ChIPpeakAnno)
+library(Repitools)
+library(BiocManager)
+library(ChIPseeker)
+library(circlize)
+library(ComplexHeatmap)
+library(dendextend)
+library(fpc)
+library(ggsci)
+library(qs)
+source("../../generic code/AuxFunctions.R")
+```
+
+```{r Read cell types information}
+#cell.types <- readxl::read_xlsx("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Cell types master table 280622 joint feature space.xlsx", sheet="cell types labels")
+```
+
+```{r Read data from each E14 region}
+s.data.di <- readRDS("../scATAC_data/E14DI1.merged.peaks.220622.Rds")
+s.data.mb <- readRDS("../scATAC_data/E14VMB.merged.peaks.220622.Rds")
+s.data.r1 <- readRDS("../scATAC_data/E14vR1.merged.peaks.220622.Rds")
+```
+
+```{r Merge regions into same Seurat object - peaks}
+s.data.r1$dataset <- 'r1'
+s.data.mb$dataset <- 'mb'
+s.data.di$dataset <- 'di'
+
+DefaultAssay(s.data.di) <- "peaks"
+DefaultAssay(s.data.mb) <- "peaks"
+DefaultAssay(s.data.r1) <- "peaks"
+
+# Pick only joint features among objects
+joint.features <- intersect(intersect(rownames(s.data.mb),rownames(s.data.di)),rownames(s.data.r1))
+
+# Please note that E14R1 samples have different fragments path, take care with symbolic links
+
+s.data.e14 <- merge(subset(s.data.di,features=joint.features), c(subset(s.data.mb, features=joint.features),subset(s.data.r1, features=joint.features)), add.cell.ids=c("di","mb","r1"), merge.data=TRUE)
+
+#Idents(s.data.e14) <- paste(s.data.e14$dataset, Idents(s.data.e14),sep=".")
+
+# Add NT type as metadata
+# nt.data <- dplyr::select(cell.types, `Cluster id`, Neurotransmitter)
+# colnames(nt.data)[1] <- "cluster"
+# nt.data[,"cluster"] <- pull(nt.data,cluster) %>% str_replace(pattern="^e14","")
+# nt.metadata <- left_join(tibble(cluster=Idents(s.data.e14)),nt.data)
+# s.data.e14 <- AddMetaData(s.data.e14, metadata = pull(nt.metadata,Neurotransmitter), col.name = "NT_type")
+```
+
+```{r}
+
+```
+

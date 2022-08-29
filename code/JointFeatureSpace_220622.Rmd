@@ -15,8 +15,10 @@ library(GenomicRanges)
 library(EnsDb.Mmusculus.v79)
 library(dendextend)
 library(DT)
-library(BiocManager)
 library(ChIPpeakAnno)
+library(Repitools)
+library(BiocManager)
+library(ChIPseeker)
 library(circlize)
 library(ComplexHeatmap)
 library(fpc)
@@ -172,7 +174,7 @@ hclust_cells <- hclust(cell.dist, method="ward.D2")
 hcd <- as.dendrogram(hclust_cells)
 ```
 
-```{r Calculate }
+```{r Calculate cluster statistics}
 # Calculation atHPC cluster and returning here
 km.stats.10 <- qread("../analysis/km.stats.res.10.200622.qs")
 km.stats.9.5 <- qread("../analysis/km.stats.res.9.5.200622.qs")
@@ -191,13 +193,17 @@ km.stats.4 <- qread("../analysis/km.stats.res.4.200622.qs")
 km.stats.list <- list(km.stats.10=km.stats.10, km.stats.9.5=km.stats.9.5, km.stats.9=km.stats.9, km.stats.8.5=km.stats.8.5, km.stats.8=km.stats.8, km.stats.7.5=km.stats.7.5, km.stats.7=km.stats.7, km.stats.6.5=km.stats.6.5, km.stats.6=km.stats.6, km.stats.5.5=km.stats.5.5, km.stats.5=km.stats.5, km.stats.4.5=km.stats.4.5,km.stats.4=km.stats.4)
 ```
 
-```{r}
+```{r Plot clustering statistics}
 avg.silhouette <- sapply(km.stats.list, function(x){x$avg.silwidth})
 dunn2 <- sapply(km.stats.list, function(x){x$dunn2})
 
 clusterint.stats <- tibble(clus.param=as.numeric(str_remove(names(dunn2), pattern = "km.stats.")), dunn2=dunn2, avg.silhouette=avg.silhouette)
 
-ggplot(clusterint.stats, aes(x=clus.param, group=1)) + geom_line(aes(y=dunn2, color="Dunn2")) + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_continuous("Dunn2", sec.axis = sec_axis(~ (. / 2.5), name = "Avg. Silhouette")) + geom_line(aes(y=avg.silhouette*2.5, color="Avg. Silhouette")) + xlab("Clade cutting height") + scale_x_continuous(breaks = seq(4, 10, by = 0.5))  + theme(legend.title=element_blank())
+ggplot(clusterint.stats, aes(x=clus.param, group=1)) + geom_line(aes(y=dunn2, color="Dunn2")) + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_continuous("Dunn2", sec.axis = sec_axis(~ (. / 2.5), name = "Avg. Silhouette")) + geom_line(aes(y=avg.silhouette*2.5, color="Avg. Silhouette")) + xlab("Clade cutting height") + scale_x_continuous(breaks = seq(4, 10, by = 0.5))  + theme(legend.title=element_blank(), text = element_text(size=16))
+
+pdf(file="../Figures/Cluster_parameters.pdf", height = 3, width = 8)
+ggplot(clusterint.stats, aes(x=clus.param, group=1)) + geom_line(aes(y=dunn2, color="Dunn2")) + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_continuous("Dunn2", sec.axis = sec_axis(~ (. / 2.5), name = "Avg. Silhouette")) + geom_line(aes(y=avg.silhouette*2.5, color="Avg. Silhouette")) + xlab("Clade cutting height") + scale_x_continuous(breaks = seq(4, 10, by = 0.5))  + theme(legend.title=element_blank(), text = element_text(size=16))
+dev.off()
 ```
 
 ```{r Cut the tree for purpose of visualization, fig.width=14}
@@ -217,18 +223,22 @@ hcd.upper %>% set("branches_lwd",5) %>% set("labels_cex",1.2) %>% plot(center=T)
 abline(h = h, lty = 2, col="red", lwd=2)
 ```
 
-```{r Cut the tree to find main clades and write those out for summit identification h8}
+```{r Cut the tree to find main clades and write those out for summit identification}
 cells_tree_cut = cutree(hclust_cells, h=h)
 lsi_cells = dplyr::tibble(barcode = Cells(neuronal.merged.filt), cells_tree_cut = cells_tree_cut)
 ```
 
-```{r See how samples are distributed in clades h8}
+```{r See how samples are distributed in clades}
 sample.clade <- table(str_extract(string = lsi_cells$barcode, pattern = "_.*__") %>% str_replace_all(pattern = "_*", replacement = ""), lsi_cells$cells_tree_cut)
-sample.clade.prop <- apply(sample.clade,2,function(x){x/sum(x)})
+
+rownames(sample.clade)[which(rownames(sample.clade)=="e14vmb")] <- "e14mb"
+rownames(sample.clade)[which(rownames(sample.clade)=="e14vr1")] <- "e14r1"
 sample.clade
+
+sample.clade.prop <- apply(sample.clade,2,function(x){x/sum(x)})
 ```
 
-```{r Draw circos plot, fig.height=24, fig.width=24}
+```{r Draw circos plot with brain regions stacked barplot, fig.height=24, fig.width=24}
 hcd.upper.circ  <- hcd.upper
 par(mar = rep(4,4))
 circos.initialize("leaf.labels", xlim = c(0, ncol(sample.clade)))
@@ -254,6 +264,117 @@ lgd_barplot = packLegend(
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 ```
 
+```{r Getting barcode to cluster mapping for each region}
+
+# Read NT types information
+nt.types <- readxl::read_xlsx("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Cell types master table 280622 joint feature space.xlsx", sheet="cell types labels") %>% dplyr::select(`Cluster id`, Neurotransmitter)
+
+# Getting barcode to cluster mapping for each region
+# s.data.e12r1 <- readRDS("../scATAC_data/E12R1_DownstreamReady.230622.RNA.pos.idents.Rds")
+# s.data.e14r1 <- readRDS("../scATAC_data/E14vR1_DownstreamReady.230622.RNA.pos.idents.Rds")
+# s.data.mb <- readRDS("../scATAC_data/E14VMB_DownstreamReady.230622.RNA.pos.idents.Rds")
+# s.data.di <- readRDS("../scATAC_data/E14DI1_DownstreamReady.220622.RNA.pos.idents.Rds")
+#
+#barcode.to.cluster.mapping.mb <- tibble(barcode=paste("_e14vmb_",names(Idents(s.data.mb)),sep=""), cluster=paste("mb.",Idents(s.data.mb),sep=""))
+#
+# barcode.to.cluster.mapping.di <- tibble(barcode=paste("_e14di_",names(Idents(s.data.di)),sep=""), cluster=paste("di.",Idents(s.data.di),sep=""))
+#
+# barcode.to.cluster.mapping.e12r1 <- tibble(barcode=paste("_e12r1_",names(Idents(s.data.e12r1)),sep=""), cluster=paste("e12r1.",Idents(s.data.e12r1),sep=""))
+#
+# barcode.to.cluster.mapping.e14r1 <- tibble(barcode=paste("_e14r1_",names(Idents(s.data.e14r1)),sep=""), cluster=paste("e14r1.",Idents(s.data.e14r1),sep=""))
+
+#combined.mappings <- bind_rows(barcode.to.cluster.mapping.mb,barcode.to.cluster.mapping.di,barcode.to.cluster.mapping.e12r1,barcode.to.cluster.mapping.e14r1)
+
+#saveRDS(combined.mappings, file="../analysis//combined.barcode.to.cluster.mappings.Rds")
+
+combined.mappings <- readRDS("../analysis/combined.barcode.to.cluster.mappings.Rds")
+
+# Please note that combined mappings contains only cells which have went through additional QC after peak detection.
+
+nt.typed.barcodes <- left_join(combined.mappings, nt.types, by=c("cluster"="Cluster id"))
+
+nt.typed.clades.with.barcodes <- left_join(lsi_cells, nt.typed.barcodes)
+
+# Change all cells not present in cluster level analysis but still here to have status Unknown for their NT type
+
+nt.typed.clades.with.barcodes[is.na(nt.typed.clades.with.barcodes$Neurotransmitter),"Neurotransmitter"] <- "Unknown"
+
+nt.type.counts <- table(nt.typed.clades.with.barcodes %>% dplyr::select(Neurotransmitter, cells_tree_cut))
+
+# Change all cells not anymore present in cell cluster stage to have NT type Unknown
+nt.type.prop <- apply(nt.type.counts,2,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+```
+
+
+```{r Draw circos plot with NT types stacked barplot, fig.height=32, fig.width=32}
+hcd.upper.circ  <- hcd.upper
+par(mar = rep(4,4))
+circos.initialize("leaf.labels", xlim = c(0, ncol(nt.type.counts)))
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.text(1:ncol(nt.type.counts)-0.5, rep(0, ncol(nt.type.counts)), labels(hcd.upper.circ), col = labels_colors(hcd.upper.circ),
+               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.2)
+}, bg.border = NA, track.height = 0.15)
+max_height = attr(hcd.upper.circ, "height")
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(t(nt.type.prop),1:ncol(nt.type.counts)-0.5, col=pal_jco()(8))
+}, track.height =.15, bg.border = NA)
+
+circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
+   circos.dendrogram(hcd.upper.circ, max_height = max_height)
+}, track.height =.45, bg.border = NA)
+
+lgd_barplot_nt.type = 
+  Legend(at = rownames(nt.type.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_jco()(8), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "NT type", size = unit(4, "mm")
+    )
+
+lgd_list_vertical = packLegend(lgd_barplot_nt.type)
+
+draw(lgd_list_vertical, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+```
+
+```{r Draw circos with combined NT and brain region stacked barplot tracks, fig.height=28, fig.width=28}
+hcd.upper.circ  <- hcd.upper
+par(mar = rep(4,4))
+circos.par(track.margin=c(0.0001, 0.0001), cell.padding=c(0.01,0.01), gap.after=.5)
+circos.initialize("leaf.labels", xlim = c(0, ncol(nt.type.counts)))
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.text(1:ncol(nt.type.counts)-0.5, rep(0, ncol(nt.type.counts)), labels(hcd.upper.circ), col = labels_colors(hcd.upper.circ),
+               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=2)
+}, bg.border = NA, track.height = 0.15)
+max_height = attr(hcd.upper.circ, "height")
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(t(sample.clade.prop),1:ncol(sample.clade)-0.5, col=pal_jco()(4))
+}, track.height =.12, bg.border = NA)
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(t(nt.type.prop),1:ncol(nt.type.counts)-0.5, col=pal_lancet()(8))
+}, track.height =.12, bg.border = NA)
+
+circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
+   circos.dendrogram(hcd.upper.circ, max_height = max_height)
+}, track.height =.41, bg.border = NA)
+
+lgd_barplot_nt.type = 
+  Legend(at = rownames(nt.type.prop), type = "points",labels_gp = gpar(col = "black", cex = 4), legend_gp = gpar(col=pal_lancet()(8), lwd = 3), title_position = "topleft", title_gp = gpar(cex = 3), title = "NT type", size = unit(8, "mm"))
+
+lgd_barplot_region = 
+  Legend(at = rownames(sample.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 4), legend_gp = gpar(col=pal_jco()(4), lwd = 3), title_position = "topleft", title_gp = gpar(cex = 3), title = "Brain region", size = unit(8, "mm"))
+
+lgd_list_vertical <- packLegend(lgd_barplot_region, lgd_barplot_nt.type)    
+
+draw(lgd_list_vertical, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+circos.clear()
+```
+
+# Macs2 and peak detection
 
 ```{r Run MACS for clade level peak detection, include=FALSE}
 neuronal.merged.filt <- AddMetaData(neuronal.merged.filt, lsi_cells$cells_tree_cut, "clade")
@@ -283,6 +404,51 @@ clade.peaks
 
 There are 482 157 features in jointly defined feature space
 
+```{r Stats of features, fig.width=12}
+ggplot(tibble(feat.widths=log10(ranges(clade.peaks)@width)),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") 0+ theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(0, 6000, by = 500))
+  
+  
+  stat_bin(binwidth=250, geom='text', color='white', aes(label=..count..), position=position_stack(vjust = 0.5))
+```
+
+```{r Peak locations circos, fig.height=8, fig.width=8}
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+circos.genomicIdeogram(species="mm10")
+circos.genomicDensity(Repitools::annoGR2DF(clade.peaks), col="#EFC000FF")
+```
+
+```{r Feature distances to nearest TSS}
+# Let's use Chipseeker package
+
+edb <- EnsDb.Mmusculus.v79
+seqlevelsStyle(edb) <- "UCSC"
+promoters <- getPromoters(TxDb=edb, upstream=3000, downstream=3000, by="gene")
+
+tagMatrix <- getTagMatrix(clade.peaks, windows=promoters)
+
+plotAvgProf(tagMatrix, xlim=c(-3000, 3000), xlab="Genomic Region (5'->3')", ylab = "Read Count Frequency", conf = 0.95, resample = 1000)
+```
+
+```{r}
+average.feature.loc.gene <- plotPeakProf2(peak = clade.peaks, upstream = rel(0.25), downstream = rel(0.25),
+              conf = 0.95, by = "gene", type = "body", nbin = 250,
+              TxDb = edb, ignore_strand = F, free_y=FALSE)
+average.feature.loc.gene + theme(text=element_text(size=26))
+```
+
+```{r}
+peakAnno.edb <- annotatePeak(clade.peaks, tssRegion=c(-3000, 3000),
+                             TxDb=edb, annoDb="org.Mm.eg.db")
+
+plotAnnoPie(peakAnno.edb)
+vennpie(peakAnno.edb)
+```
+
+```{r Distribution of features relative to TSS, fig.height=2.5, fig.width=8}
+plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
+```
+
+
 ```{r}
 clade.peaks.di
 ```
@@ -293,7 +459,7 @@ Vs. for example 287 587 features in separately defined E14Di feature space.
 hits <- findOverlaps(clade.peaks, clade.peaks.di)
 overlaps <- pintersect(clade.peaks[queryHits(hits)], clade.peaks.di[subjectHits(hits)])
 percentOverlap <- width(overlaps) / width(clade.peaks.di[subjectHits(hits)])
-ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="black", fill=pal_jco()(6)[6]) + theme_minimal() + xlab("Overlap proportion") + ggtitle("Hist. of E14di separate feature space feature overlaps with the joint one")
+ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="black", fill=pal_jco()(6)[6]) + theme_minimal() + xlab("Overlap proportion") + ggtitle("Hist. of E14DI separate feature space feature overlaps\nwith the joint one") + theme(text = element_text(size=14))
 #hits <- hits[percentOverlap > 0.8]
 ```
 
@@ -301,19 +467,25 @@ ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="b
 hits <- findOverlaps(clade.peaks.di, clade.peaks)
 overlaps <- pintersect(clade.peaks.di[queryHits(hits)], clade.peaks[subjectHits(hits)])
 percentOverlap <- width(overlaps) / width(clade.peaks[subjectHits(hits)])
-ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="black", fill=pal_jco()(6)[6]) + theme_minimal() + xlab("Overlap proportion") + ggtitle("Hist. of joint feature space feature overlaps with the E14DI separate one")
+ggplot(tibble(overlap=percentOverlap),aes(x=overlap)) + geom_histogram(colour="black", fill=pal_jco()(6)[6]) + theme_minimal() + xlab("Overlap proportion") + ggtitle("Hist. of joint feature space feature overlaps\nwith the E14DI separate one") + theme(text = element_text(size=14))
 ```
 
-```{r VENN diagram Joint vs E14DI vs E14vMB}
-makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.di, clade.peaks.e14vmb1), NameOfPeaks = c("Joint space","E14DI", "E14vMB"), minoverlap = 100)
+```{r VENN diagram Joint vs E14DI vs E14vMB, fig.height=6, fig.width=6}
+pdf(file="Joint_E14DI_E14vMB.pdf", width = 6, height = 6)
+joint.E14DI.E14vMB.plot <- makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.di, clade.peaks.e14vmb1), NameOfPeaks = c("Joint space","E14DI", "E14vMB"), minoverlap = 100)
+dev.off()
 ```
 
-```{r VENN diagram of E12R1 vs E14R1 vs joint space}
+```{r VENN diagram of E12R1 vs E14R1 vs joint space, fig.height=6, fig.width=6}
+pdf(file="Joint_E12R1_E12R1.pdf", width = 6, height = 6)
 makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.e14vr1, clade.peaks.e12r1), NameOfPeaks = c("Joint space","E14vR1","E12R1"), minoverlap = 100)
+dev.off()
 ```
 
-```{r VENN diagram with all comparisons}
+```{r VENN diagram with all comparisons, fig.height=6, fig.width=6}
+pdf(file="VENN_all.pdf", width = 15, height = 15)
 makeVennDiagram(Peaks=list(clade.peaks,clade.peaks.di, clade.peaks.e14vmb1, clade.peaks.e12r1,clade.peaks.e14vr1), NameOfPeaks = c("Joint space","E14DI", "E14vMB","E12R1","E14vR1"), minoverlap = 100)
+dev.off()
 ```
 
 ```{r Env info}
