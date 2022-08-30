@@ -1,0 +1,523 @@
+---
+title: "R Notebook of E14 scATAC processing at clade level with pre-defined joint feature space"
+output: html_notebook
+---
+
+```{r Libraries, include=FALSE}
+load.libs <- c(
+  "Signac",
+  "tidyverse",
+  "dplyr",
+  "BSgenome.Mmusculus.UCSC.mm10",
+  "RColorBrewer",
+  "future",
+  "GenomicRanges",
+  "EnsDb.Mmusculus.v79",
+  "dendextend",
+  "Seurat")
+if (!require("pacman")) install.packages("pacman"); library(pacman)
+p_load(load.libs, update = FALSE, character.only = TRUE)
+status <- sapply(load.libs,require,character.only = TRUE)
+if(all(status)){
+    print("SUCCESS: You have successfully installed and loaded all required libraries.")
+} else {
+    cat("ERROR: One or more libraries failed to install correctly. Check the following list for FALSE cases and try again...\n\n")
+    status
+}
+
+source("../../generic code/AuxFunctions.R")
+```
+
+```{r Setting multicore/multisession}
+options(parallelly.makeNodePSOCK.setup_strategy = "sequential", future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE)
+plan("multisession", workers = 6)
+```
+
+```{r Setting sample variables}
+di.sample.name <- "E14DI1"
+r1.sample.name <- "E14vR1"
+mb.sample.name <- "E14VMB"
+run.date <- "298622"
+```
+
+```{r Path to raw data}
+di.raw.path <- "/Volumes/MyBookDuo/Data/e14di_data/scATAC/"
+mb.raw.path <- "/Volumes/MyBookDuo/Data/e14vmb1_data/scATAC/"
+r1.raw.path <- "/Volumes/MyBookDuo/Data/e14vr1_data/scATAC/"
+```
+
+```{r Reading predefined feature space}
+clade.peaks <- readRDS("../../NeuronalFeatureSpace/analysis/joint.clade.peaks.180622.Rds")
+```
+
+# --- Data preprocessing and QC 
+```{r Read cell-level information and fragments files - DI}
+# E14_DI_1_ATAC_v1-2 => E14_DI_1_0
+di.repl0.0.singlecell <- read_csv(file = paste(di.raw.path,di.sample.name,"_0/outs/singlecell.csv", sep=""))
+# E14_FB_1 => E14_DI_1_1
+di.repl1.1.singlecell <- read_csv(file = paste(di.raw.path,di.sample.name,"_1/outs/singlecell.csv", sep=""))
+# E14_FB_2 => E14_DI_1_2
+di.repl2.2.singlecell <- read_csv(file = paste(di.raw.path,di.sample.name,"_2/outs/singlecell.csv", sep=""))
+
+di.repl0.cells <- dplyr::filter(di.repl0.0.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+di.repl1.cells <- dplyr::filter(di.repl1.1.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+di.repl2.cells <- dplyr::filter(di.repl2.2.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+
+if (!file.exists(paste(di.raw.path,di.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(di.raw.path,di.sample.name,"_0/outs/fragments.tsv.gz", sep=""),
+  cells = repl0.cells,
+  outfile = paste(di.raw.path,di.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+if (!file.exists(paste(di.raw.path,di.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(di.raw.path,di.sample.name,"_1/outs/fragments.tsv.gz", sep=""),
+  cells = repl1.cells,
+  outfile = paste(di.raw.path,di.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+if (!file.exists(paste(di.raw.path,di.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(di.raw.path,di.sample.name,"_2/outs/fragments.tsv.gz", sep=""),
+  cells = repl2.cells,
+  outfile = paste(di.raw.path,di.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+di.repl0.fragments <- CreateFragmentObject(path = paste(di.raw.path,di.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""), cells = di.repl0.cells, validate.fragments = FALSE)
+di.repl1.fragments <- CreateFragmentObject(path = paste(di.raw.path,di.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""), cells = di.repl1.cells, validate.fragments = FALSE)
+di.repl2.fragments <- CreateFragmentObject(path = paste(di.raw.path,di.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""), cells = di.repl2.cells, validate.fragments = FALSE)
+```
+
+```{r Read cell-level information and fragments files - R1}
+# E14_DI_1_ATAC_v1-2 => E14_DI_1_0
+r1.repl0.0.singlecell <- read_csv(file = paste(r1.raw.path,r1.sample.name,"_0/outs/singlecell.csv", sep=""))
+# E14_FB_1 => E14_DI_1_1
+r1.repl1.1.singlecell <- read_csv(file = paste(r1.raw.path,r1.sample.name,"_1/outs/singlecell.csv", sep=""))
+# E14_FB_2 => E14_DI_1_2
+r1.repl2.2.singlecell <- read_csv(file = paste(r1.raw.path,r1.sample.name,"_2/outs/singlecell.csv", sep=""))
+
+r1.repl0.cells <- dplyr::filter(r1.repl0.0.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+r1.repl1.cells <- dplyr::filter(r1.repl1.1.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+r1.repl2.cells <- dplyr::filter(r1.repl2.2.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+
+if (!file.exists(paste(r1.raw.path,r1.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(r1.raw.path,r1.sample.name,"_0/outs/fragments.tsv.gz", sep=""),
+  cells = repl0.cells,
+  outfile = paste(r1.raw.path,r1.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+if (!file.exists(paste(r1.raw.path,r1.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(r1.raw.path,r1.sample.name,"_1/outs/fragments.tsv.gz", sep=""),
+  cells = repl1.cells,
+  outfile = paste(r1.raw.path,r1.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+if (!file.exists(paste(r1.raw.path,r1.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(r1.raw.path,r1.sample.name,"_2/outs/fragments.tsv.gz", sep=""),
+  cells = repl2.cells,
+  outfile = paste(r1.raw.path,r1.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+r1.repl0.fragments <- CreateFragmentObject(path = paste(r1.raw.path,r1.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""), cells = r1.repl0.cells, validate.fragments = FALSE)
+r1.repl1.fragments <- CreateFragmentObject(path = paste(r1.raw.path,r1.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""), cells = r1.repl1.cells, validate.fragments = FALSE)
+r1.repl2.fragments <- CreateFragmentObject(path = paste(r1.raw.path,r1.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""), cells = r1.repl2.cells, validate.fragments = FALSE)
+```
+
+```{r Read cell-level information and fragments files - MB}
+# E14_DI_1_ATAC_v1-2 => E14_DI_1_0
+mb.repl0.0.singlecell <- read_csv(file = paste(mb.raw.path,mb.sample.name,"_0/outs/singlecell.csv", sep=""))
+# E14_FB_1 => E14_DI_1_1
+mb.repl1.1.singlecell <- read_csv(file = paste(mb.raw.path,mb.sample.name,"_1/outs/singlecell.csv", sep=""))
+# E14_FB_2 => E14_DI_1_2
+mb.repl2.2.singlecell <- read_csv(file = paste(mb.raw.path,mb.sample.name,"_2/outs/singlecell.csv", sep=""))
+
+mb.repl0.cells <- dplyr::filter(mb.repl0.0.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+mb.repl1.cells <- dplyr::filter(mb.repl1.1.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+mb.repl2.cells <- dplyr::filter(mb.repl2.2.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+
+if (!file.exists(paste(mb.raw.path,mb.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(mb.raw.path,mb.sample.name,"_0/outs/fragments.tsv.gz", sep=""),
+  cells = repl0.cells,
+  outfile = paste(mb.raw.path,mb.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+if (!file.exists(paste(mb.raw.path,mb.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(mb.raw.path,mb.sample.name,"_1/outs/fragments.tsv.gz", sep=""),
+  cells = repl1.cells,
+  outfile = paste(mb.raw.path,mb.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+if (!file.exists(paste(mb.raw.path,mb.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""))){
+FilterCells(
+  fragments = paste(mb.raw.path,mb.sample.name,"_2/outs/fragments.tsv.gz", sep=""),
+  cells = repl2.cells,
+  outfile = paste(mb.raw.path,mb.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+}
+
+mb.repl0.fragments <- CreateFragmentObject(path = paste(mb.raw.path,mb.sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""), cells = mb.repl0.cells, validate.fragments = FALSE)
+mb.repl1.fragments <- CreateFragmentObject(path = paste(mb.raw.path,mb.sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""), cells = mb.repl1.cells, validate.fragments = FALSE)
+mb.repl2.fragments <- CreateFragmentObject(path = paste(mb.raw.path,mb.sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""), cells = mb.repl2.cells, validate.fragments = FALSE)
+```
+
+```{r Defining used chromosomes}
+used.chromosomes <- c("chr1", "chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19")
+genome.lengths <- seqlengths(BSgenome.Mmusculus.UCSC.mm10)[names(seqlengths(BSgenome.Mmusculus.UCSC.mm10)) %in% used.chromosomes]
+```
+
+
+
+
+```{r Combine new Feature bin x cells matrix based on peaks detected from clades - DI}
+
+# Note dropping some chromosomes
+di.clade.peak.feature.matrix.0 <- FeatureMatrix(
+  fragments = di.repl0.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+)
+
+di.clade.peak.feature.matrix.1 <- FeatureMatrix(
+  fragments = di.repl1.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+)
+
+di.clade.peak.feature.matrix.2 <- FeatureMatrix(
+  fragments = di.repl2.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+  )
+```
+
+```{r Combine new Feature bin x cells matrix based on peaks detected from clades - R1}
+
+# Note dropping some chromosomes
+r1.clade.peak.feature.matrix.0 <- FeatureMatrix(
+  fragments = r1.repl0.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+)
+
+r1.clade.peak.feature.matrix.1 <- FeatureMatrix(
+  fragments = r1.repl1.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+)
+
+r1.clade.peak.feature.matrix.2 <- FeatureMatrix(
+  fragments = r1.repl2.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+  )
+```
+
+```{r Combine new Feature bin x cells matrix based on peaks detected from clades - MB}
+
+# Note dropping some chromosomes
+mb.clade.peak.feature.matrix.0 <- FeatureMatrix(
+  fragments = mb.repl0.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+)
+
+mb.clade.peak.feature.matrix.1 <- FeatureMatrix(
+  fragments = mb.repl1.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+)
+
+mb.clade.peak.feature.matrix.2 <- FeatureMatrix(
+  fragments = mb.repl2.fragments,
+  features = keepSeqlevels(clade.peaks, used.chromosomes, pruning.mode = "coarse"),
+  process_n = 5000,
+  sep = c("-", "-"),
+  verbose = TRUE
+  )
+```
+
+
+
+```{r Create Chromatin assay- DI}
+di.chr.clade.peak.assay.0 <- CreateChromatinAssay(counts = di.clade.peak.feature.matrix.0, fragments = list(di.repl0.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(di.clade.peak.feature.matrix.0)))
+
+di.chr.clade.peak.assay.1 <- CreateChromatinAssay(counts = di.clade.peak.feature.matrix.1, fragments = list(di.repl1.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(di.clade.peak.feature.matrix.1)))
+
+di.chr.clade.peak.assay.2 <- CreateChromatinAssay(counts = di.clade.peak.feature.matrix.2, fragments = list(di.repl2.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(di.clade.peak.feature.matrix.2)))
+```
+
+```{r Create Chromatin assay- R1}
+r1.chr.clade.peak.assay.0 <- CreateChromatinAssay(counts = r1.clade.peak.feature.matrix.0, fragments = list(r1.repl0.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(r1.clade.peak.feature.matrix.0)))
+
+r1.chr.clade.peak.assay.1 <- CreateChromatinAssay(counts = r1.clade.peak.feature.matrix.1, fragments = list(r1.repl1.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(r1.clade.peak.feature.matrix.1)))
+
+r1.chr.clade.peak.assay.2 <- CreateChromatinAssay(counts = r1.clade.peak.feature.matrix.2, fragments = list(r1.repl2.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(r1.clade.peak.feature.matrix.2)))
+```
+
+```{r Create Chromatin assay- MB}
+mb.chr.clade.peak.assay.0 <- CreateChromatinAssay(counts = mb.clade.peak.feature.matrix.0, fragments = list(mb.repl0.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(mb.clade.peak.feature.matrix.0)))
+
+mb.chr.clade.peak.assay.1 <- CreateChromatinAssay(counts = mb.clade.peak.feature.matrix.1, fragments = list(mb.repl1.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(mb.clade.peak.feature.matrix.1)))
+
+mb.chr.clade.peak.assay.2 <- CreateChromatinAssay(counts = mb.clade.peak.feature.matrix.2, fragments = list(mb.repl2.fragments), genome = seqinfo(BSgenome.Mmusculus.UCSC.mm10), ranges = StringToGRanges(rownames(mb.clade.peak.feature.matrix.2)))
+```
+
+
+```{r Create Seurat objects from peak Chromatin assays - DI}
+di.repl0.metadata <- as.data.frame(dplyr::filter(di.repl0.0.singlecell, is__cell_barcode == 1))
+rownames(di.repl0.metadata) <- di.repl0.metadata$barcode
+
+di.repl1.metadata <- as.data.frame(dplyr::filter(di.repl1.1.singlecell, is__cell_barcode == 1))
+rownames(di.repl1.metadata) <- di.repl1.metadata$barcode
+
+di.repl2.metadata <- as.data.frame(dplyr::filter(di.repl2.2.singlecell, is__cell_barcode == 1))
+rownames(di.repl2.metadata) <- di.repl2.metadata$barcode
+
+di.repl0.s.data.peaks <- CreateSeuratObject(
+  counts = di.chr.clade.peak.assay.0,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = di.repl0.metadata
+)
+
+di.repl1.s.data.peaks <- CreateSeuratObject(
+  counts = di.chr.clade.peak.assay.1,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = di.repl1.metadata
+)
+
+di.repl2.s.data.peaks <- CreateSeuratObject(
+  counts = di.chr.clade.peak.assay.2,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = di.repl2.metadata
+)
+```
+
+```{r Create Seurat objects from peak Chromatin assays - R1}
+r1.repl0.metadata <- as.data.frame(dplyr::filter(r1.repl0.0.singlecell, is__cell_barcode == 1))
+rownames(r1.repl0.metadata) <- r1.repl0.metadata$barcode
+
+r1.repl1.metadata <- as.data.frame(dplyr::filter(r1.repl1.1.singlecell, is__cell_barcode == 1))
+rownames(r1.repl1.metadata) <- r1.repl1.metadata$barcode
+
+r1.repl2.metadata <- as.data.frame(dplyr::filter(r1.repl2.2.singlecell, is__cell_barcode == 1))
+rownames(r1.repl2.metadata) <- r1.repl2.metadata$barcode
+
+r1.repl0.s.data.peaks <- CreateSeuratObject(
+  counts = r1.chr.clade.peak.assay.0,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = r1.repl0.metadata
+)
+
+r1.repl1.s.data.peaks <- CreateSeuratObject(
+  counts = r1.chr.clade.peak.assay.1,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = r1.repl1.metadata
+)
+
+r1.repl2.s.data.peaks <- CreateSeuratObject(
+  counts = r1.chr.clade.peak.assay.2,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = r1.repl2.metadata
+)
+```
+
+```{r Create Seurat objects from peak Chromatin assays - MB}
+mb.repl0.metadata <- as.data.frame(dplyr::filter(mb.repl0.0.singlecell, is__cell_barcode == 1))
+rownames(mb.repl0.metadata) <- mb.repl0.metadata$barcode
+
+mb.repl1.metadata <- as.data.frame(dplyr::filter(mb.repl1.1.singlecell, is__cell_barcode == 1))
+rownames(mb.repl1.metadata) <- mb.repl1.metadata$barcode
+
+mb.repl2.metadata <- as.data.frame(dplyr::filter(mb.repl2.2.singlecell, is__cell_barcode == 1))
+rownames(mb.repl2.metadata) <- mb.repl2.metadata$barcode
+
+mb.repl0.s.data.peaks <- CreateSeuratObject(
+  counts = mb.chr.clade.peak.assay.0,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = mb.repl0.metadata
+)
+
+mb.repl1.s.data.peaks <- CreateSeuratObject(
+  counts = mb.chr.clade.peak.assay.1,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = mb.repl1.metadata
+)
+
+mb.repl2.s.data.peaks <- CreateSeuratObject(
+  counts = mb.chr.clade.peak.assay.2,
+  assay = 'peaks_count',
+  project = 'ATAC',
+  meta.data = mb.repl2.metadata
+)
+```
+
+```{r Merge Seurat objects}
+di.repl0.s.data.peaks$replicate <- '_di_0'
+di.repl1.s.data.peaks$replicate <- '_di_1'
+di.repl2.s.data.peaks$replicate <- '_di_2'
+
+r1.repl0.s.data.peaks$replicate <- '_r1_0'
+r1.repl1.s.data.peaks$replicate <- '_r1_1'
+r1.repl2.s.data.peaks$replicate <- '_r1_2'
+
+mb.repl0.s.data.peaks$replicate <- '_mb_0'
+mb.repl1.s.data.peaks$replicate <- '_mb_1'
+mb.repl2.s.data.peaks$replicate <- '_mb_2'
+
+system.time(e14.s.data <- merge(x = di.repl0.s.data.peaks, y = list(di.repl1.s.data.peaks,di.repl2.s.data.peaks,r1.repl0.s.data.peaks,r1.repl1.s.data.peaks,r1.repl2.s.data.peaks,mb.repl0.s.data.peaks,mb.repl1.s.data.peaks,mb.repl2.s.data.peaks), add.cell.ids = c("_di_0", "_di_1","_di_2","_r1_0","_r1_1","_r1_2","_mb_0","_mb_1","_mb_2")))
+```
+
+```{r Add gene annotations from Ensembl, include=FALSE}
+# extract gene annotations from EnsDb
+#annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79, standard.chromosomes = TRUE)
+
+annotations <- readRDS("../../Github/AnalysisEnvironment/mm10/Ensembel_Mmusculus79_annotation.Rds")
+
+# change to UCSC style since the data was mapped to hg19
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+
+#ucsc.levels <- str_replace(string=paste("chr",seqlevels(annotations),sep=""), pattern="chrMT", replacement="chrM")
+#seqlevels(annotations) <- ucsc.levels
+
+# add the gene information to the object
+Annotation(e14.s.data) <- annotations
+```
+
+```{r Calculate nucleosome signal}
+e14.s.data <- NucleosomeSignal(object = e14.s.data)
+```
+
+```{r Plotting }
+e14.s.data$nucleosome_group <- ifelse(e14.s.data$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+FragmentHistogram(object = e14.s.data, group.by = 'nucleosome_group', region = 'chr1-1-10000000')
+```
+
+```{r TSS enrichment}
+e14.s.data <- TSSEnrichment(e14.s.data, fast = FALSE)
+```
+
+```{r Plot biological QC data, fig.width=14}
+e14.s.data$pct_reads_in_peaks <- e14.s.data$peak_region_fragments / e14.s.data$passed_filters * 100
+e14.s.data$blacklist_ratio <- e14.s.data$blacklist_region_fragments / e14.s.data$peak_region_fragments
+
+VlnPlot(
+  object = e14.s.data,
+  features = c('pct_reads_in_peaks', 'peak_region_fragments',
+               'TSS.enrichment', 'blacklist_ratio', 'nucleosome_signal'),
+  pt.size = 0.1,
+  ncol = 5
+)
+
+# Storing merged clade level object as it takes so long to form
+saveRDS(e14.s.data,paste("E14.merged.clade.phase.",run.date,".Rds",sep=""))
+```
+
+```{r Filter based on biological QC values}
+e14.s.data.filt <- subset(
+  x = e14.s.data,
+  subset = peak_region_fragments > 3000 &
+    peak_region_fragments < 45000 &
+    pct_reads_in_peaks > 55 &
+    blacklist_ratio < 0.015 &
+    nucleosome_signal < 3 &
+    TSS.enrichment > 4.5
+)
+e14.s.data.filt
+```
+
+```{r Filtering based on number of cells per feature or vice versa in peak phase}
+DefaultAssay(e14.s.data.filt) <- 'peaks_count'
+min.cells.thr <- round(length(unique(Cells(e14.s.data.filt)))*0.01, digits = 0)
+max.cells.thr <- round(length(unique(Cells(e14.s.data.filt)))*0.975, digits = 0)
+
+min.features.thr <- round(nrow(e14.s.data.filt)*0.025, digits = 0)
+max.features.thr <- round(nrow(e14.s.data.filt)*0.975, digits = 0)
+
+cell.per.feature <- rowSums(GetAssayData(e14.s.data.filt[["peaks_count"]])>0)
+feature.per.cell <- colSums(GetAssayData(e14.s.data.filt[["peaks_count"]])>0)
+
+feature.filter.index <- which(cell.per.feature >= min.cells.thr & cell.per.feature <= max.cells.thr)
+cell.filter.index <- which(feature.per.cell >= min.features.thr & feature.per.cell <= max.features.thr)
+
+features.to.keep <- rownames(e14.s.data.filt)[feature.filter.index]
+cells.to.keep <- Cells(e14.s.data.filt)[cell.filter.index]
+
+e14.s.data.filt <- subset(e14.s.data.filt, cells = cells.to.keep, features = features.to.keep)
+e14.s.data.filt
+```
+
+```{r Binarize counts for peak assay}
+e14.s.data.filt[["peaks"]] <- e14.s.data.filt[["peaks_count"]]
+DefaultAssay(e14.s.data.filt) <- 'peaks'
+e14.s.data.filt <- BinarizeCounts(e14.s.data.filt, assay = "peaks")
+```
+
+```{r Re-add genomic annotation to the Seurat object}
+Annotation(e14.s.data.filt) <- annotations
+```
+
+```{r Save data for downstream analysis}
+saveRDS(e14.s.data.filt, paste("../scATAC_data/E14.merged.peaks.",run.date,".Rds",sep=""))
+``` 
+
+```{r Env info}
+# Conda env r411_291021
+sessionInfo()
+```

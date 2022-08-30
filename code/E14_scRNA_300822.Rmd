@@ -1,0 +1,203 @@
+---
+title: "E14DI1 scRNA analysis with process and parameters standardized with rV2 project"
+output: html_notebook
+---
+
+```{r Loading libraries, include=FALSE}
+library(Seurat);
+library(tidyverse);
+library(ggplot2);
+library(future);
+library(org.Mm.eg.db);
+library(randomcoloR);
+library(DT);
+library(data.table);
+source("../../generic code/AuxFunctions.R");
+```
+
+```{r Setting Seurat multicore}
+plan("multisession", workers = 6)
+options(future.globals.maxSize = 12 * 1024 ^ 3, future.rng.onMisuse="ignore")
+```
+
+```{r Setting variable}
+sample.name <- "E14"
+run.date <- "300822"
+```
+
+```{r Reading datafiles and form Seurat objects - DI}
+  di.repl1 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14di_data/scRNA/E14_DI_1_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  di.s.repl1 <- CreateSeuratObject(counts = di.repl1, project = "DI")
+
+  di.repl2 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14di_data/scRNA/E14_DI_2_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  di.s.repl2 <- CreateSeuratObject(counts = di.repl2, project = "DI")
+```
+
+```{r Read Ensembl to gene name mapping from 10x datafiles for both Seurat objects - DI}
+di.feature.data.repl1 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e14di_data/scRNA/E14_DI_1_RNA/outs/filtered_feature_bc_matrix/features.tsv.gz", header=FALSE), c("ensg_id","gene_name","exp_type")))
+
+di.feature.data.repl2 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e14di_data/scRNA/E14_DI_2_RNA/outs/filtered_feature_bc_matrix/features.tsv.gz", header=FALSE), c("ensg_id","gene_name","exp_type")))
+```
+
+```{r Reading datafiles and form Seurat objects - R1}
+  r1.repl1 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vr1_data/scRNA/E14vR1_1_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  r1.s.repl1 <- CreateSeuratObject(counts = r1.repl1, project = "R1")
+
+  r1.repl2 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vr1_data/scRNA/E14vR1_2_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  r1.s.repl2 <- CreateSeuratObject(counts = r1.repl2, project = "R1")
+```
+
+```{r Read Ensembl to gene name mapping from 10x datafiles for both Seurat objects - R1}
+r1.feature.data.repl1 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e14vr1_data/scRNA/E14vR1_1_RNA/outs/filtered_feature_bc_matrix/features.tsv.gz", header=FALSE), c("ensg_id","gene_name","exp_type")))
+
+r1.feature.data.repl2 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e14vr1_data/scRNA/E14vR1_2_RNA/outs/filtered_feature_bc_matrix/features.tsv.gz", header=FALSE), c("ensg_id","gene_name","exp_type")))
+```
+
+```{r Reading datafiles and form Seurat objects - MB}
+  mb.repl1 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vmb1_data/scRNA/E14VMB_1_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  mb.s.repl1 <- CreateSeuratObject(counts = mb.repl1, project = "MB")
+
+  mb.repl2 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vr1_data/scRNA/E14vR1_2_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  mb.s.repl2 <- CreateSeuratObject(counts = mb.repl2, project = "MB")
+```
+
+```{r Read Ensembl to gene name mapping from 10x datafiles for both Seurat objects - MB}
+mb.feature.data.repl1 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e14vmb1_data/scRNA/E14VMB_1_RNA/outs/filtered_feature_bc_matrix/features.tsv.gz", header=FALSE), c("ensg_id","gene_name","exp_type")))
+
+mb.feature.data.repl2 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e14vmb1_data/scRNA/E14VMB_2_RNA/outs/filtered_feature_bc_matrix/features.tsv.gz", header=FALSE), c("ensg_id","gene_name","exp_type")))
+```
+
+```{r Merging Seurat objects}
+s.data_RNA<- merge(x = di.s.repl1, y = list(di.s.repl2,r1.s.repl1, r1.s.repl2, mb.s.repl1, mb.s.repl2), add.cell.ids = c( "di.repl1", "di.repl2", "r1.repl1", "r1.replt2", "mb.repl1", "mb.repl2"), project = "e14.rna.data")
+```
+
+```{r Adding feature metadata after merge}
+# Note, assumes identical feature metadata between replicates
+s.data_RNA[['RNA']] <- AddMetaData(object = s.data_RNA[['RNA']], metadata = di.feature.data.repl1[,2], col.name="feature_symbol")
+```
+
+```{r Remove TDTOMATOG}
+s.data_RNA <- subset(s.data_RNA, features=rownames(s.data_RNA)[!rownames(s.data_RNA)=="TDTOMATOG"])
+```
+
+```{r Calculate percentage of mt- features}
+feature.map <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = rownames(s.data_RNA), feature.format = "ens")
+
+mt.features <- rownames(s.data_RNA[grep("^MT-", feature.map, ignore.case = T)])
+
+s.data_RNA[["percent.mt"]] <- PercentageFeatureSet(s.data_RNA, features = mt.features)
+```
+
+```{r Plot nFeature_RNA and mitochondrial genes per cell before filtering}
+VlnPlot(s.data_RNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r Filtering likely cell doublets and noise}
+s.data_RNA <- subset(s.data_RNA, subset = nFeature_RNA > 2800 & nFeature_RNA < 5800 & percent.mt < 15)
+```
+
+```{r Plot nFeature_RNA and mitochondrial genes per cell after filtering}
+VlnPlot(s.data_RNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r LogNormalize data}
+s.data_RNA <- NormalizeData(s.data_RNA, normalization.method = "LogNormalize", scale.factor = 10000)
+```
+
+```{r Finding variable features}
+s.data_RNA <- FindVariableFeatures(s.data_RNA, selection.method = "vst", nfeatures = 3000)
+```
+
+```{r Scaling data while regressing percent.mt}
+s.data_RNA <- ScaleData(s.data_RNA, vars.to.regress = c("percent.mt","nFeature_RNA","nCount_RNA"))
+```
+
+```{r Identify 10 most highly variable genes}
+top10 <- head(VariableFeatures(s.data_RNA), 10)
+```
+
+```{r Plot variable features with and without labels}
+plot1 <- VariableFeaturePlot(s.data_RNA)
+plot1
+LabelPoints(plot = plot1, points = top10, repel = TRUE, labels=convert_feature_identity(object = s.data_RNA, assay = "RNA", features = top10, feature.format = "ens"))
+```
+
+
+```{r RunPCA, include=FALSE}
+s.data_RNA <- RunPCA(s.data_RNA, features = VariableFeatures(object = s.data_RNA))
+```
+
+```{r Plot DimPlot and DimHeatmap, fig.height=18, fig.width=18}
+#DimHeatmap(s.data_RNA, dims = 1:20, cells = 500, balanced = TRUE)
+```
+
+```{r Calculate JackStraw data}
+s.data_RNA <- JackStraw(s.data_RNA, num.replicate = 10, dims = 20)
+s.data_RNA <- ScoreJackStraw(s.data_RNA, dims = 1:20)
+```
+
+```{r Plot Jackstraw plot}
+JackStrawPlot(s.data_RNA, dims = 1:20)
+```
+
+```{r Draw Elbowplot}
+ElbowPlot(s.data_RNA, ndims=30)
+```
+
+```{r Find neighbours and clusters}
+s.data_RNA <- FindNeighbors(s.data_RNA, dims = 1:20)
+s.data_RNA <- FindClusters(s.data_RNA, resolution = 2)
+```
+
+```{r RunUMAP}
+s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:20, spread=1.5)
+```
+
+```{r Draw DimPlot}
+palette <- distinctColorPalette(length(levels(Idents(s.data_RNA))))
+DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette)
+```
+
+```{r Some validation plots, fig.height=24, fig.width=18}
+markers.symbols <-  c("Gad1", "Slc17a6", "Dlx1", "Tal2", "Pou4f1", "Dlx2","Ascl1","Nkx2-2", "Sst")
+markers.id <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = markers.symbols, feature.format = "symbol")
+
+f1.list <- lapply(1:length(markers.id), function(f){
+  FeaturePlot(s.data_RNA, features=markers.id[f], reduction="umap") + labs(title=markers.symbols[f])
+})
+
+patchwork::wrap_plots(f1.list)
+```
+
+```{r Find all markers}
+all.markers <- tibble(FindAllMarkers(s.data_RNA, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25))
+```
+
+```{r Filter top 2 markers}
+top2.markers <-all.markers %>% group_by(cluster) %>% top_n(n = 2, wt = avg_log2FC)
+top2.markers$feature_symbol <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = pull(top2.markers, gene), feature.format = "ens")
+create_dt(top2.markers)
+```
+
+---
+
+Table of top 2 markers per cluster
+
+```{r Find all markers with stricter parameters}
+top20.markers <- all.markers %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+top20.markers$feature_symbol <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = pull(top20.markers, gene), feature.format = "ens")
+create_dt(top20.markers)
+```
+
+---
+
+Table of top 20 markers per cluster
+
+```{r Saving Seurat object for further use}
+saveRDS(s.data_RNA, file = paste("../scRNA/",sample.name,"scRNAseq.",run.date,".Rds", sep=""))
+```
+
+
+```{r}
+sessionInfo()
+```
