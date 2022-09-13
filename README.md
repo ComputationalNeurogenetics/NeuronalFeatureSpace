@@ -4,7 +4,7 @@ This is subproject of defining joint feature space for mouse CNS E12-E14, more s
 
 Open topics include how to validate clades biologically, or is this necessary as such. However, some type of optimization for cut height needs to be done.
 
-Main steps to reproduce analysis goes as described below (Conda env: r411_221021 for step 1, and then r421 for steps after that):
+Main steps to reproduce analysis goes as described below (Conda env: r411_291021 for step 1, and then r421 for steps after that):
 
 1) Run JointFeatureSpace_220622.Rmd to create joint featurespace.
 2) Run R14_scRNA_300822.Rmd to merge and process scRNA samples together.
