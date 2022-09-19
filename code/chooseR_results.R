@@ -1,14 +1,14 @@
+# To run:  R CMD BATCH ../code/chooseR_results.R from chooseR folder.
 
-# Use mclapply based loop in chooseR_server_side.Rmd to calculate results per resolution value by using variables below.
-s.data <- qread("../scATAC_data/s.data.merged.for.chooseR.qs", nthreads = 20)
-npcs <- 58
+require(magrittr)
+require(tidyverse)
+
 resolutions <- c(seq(1,20,by=1))
-assay <- "peaks"
-reduction <- "lsi"
-results_path <- "../chooseR/results_leiden/"
+#assay <- "peaks"
+#reduction <- "lsi"
+results_path <- "./results_leiden/"
 
-
-source("../chooseR/R/pipeline.R")
+source("./R/pipeline.R")
 # Create silhouette plot
 # Read in scores and calculate CIs
 scores <- purrr::map(
@@ -132,5 +132,5 @@ scores.out <- scores %>%
   dplyr::arrange(dplyr::desc(avg_sil)) %>%
   dplyr::mutate_at("cluster", ordered, levels = .$cluster)
 
-saveRDS(scores.out,file="scores.Rds")
+saveRDS(scores.out,file="./results_leiden/scores.Rds")
 
