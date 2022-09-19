@@ -33,6 +33,8 @@ multiple_cluster <- function(
                              size = 0.8,
                              npcs = 100,
                              res = 1.2,
+			algorithm = 1,
+			random.seed = NULL,
                              reduction = "pca",
                              assay = "SCT") {
 
@@ -52,7 +54,9 @@ multiple_cluster <- function(
       small_obj,
       reduction = reduction,
       npcs = npcs,
+	algorithm = algorithm,
       resolution = res,
+	random.seed = random.seed,
       assay = assay
     )
     clusters <- dplyr::left_join(

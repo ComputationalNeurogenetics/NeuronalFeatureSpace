@@ -34,23 +34,27 @@ find_clusters <- function(
                           obj,
                           reduction = "pca",
                           npcs = 100,
+			algorithm = 1,
                           assay = "integrated",
                           features = NULL,
+			random.seed = random.seed,
                           resolution = 0.8,
                           verbose = FALSE) {
   obj <- Seurat::FindNeighbors(
     obj,
     reduction = reduction,
-    dims = 1:npcs,
-    assay = integtrated,
+    dims = npcs,
+    assay = assay,
     features = features,
     verbose = verbose,
-    graph.name = paste(reduction, assay, sep = ".")
+    graph.name = c(paste("N",reduction, assay, sep = "."),paste("S",reduction, assay, sep = "."))
   )
   obj <- Seurat::FindClusters(
     obj,
+	algorithm = algorithm,
     resolution = resolution,
-    graph.name = paste(reduction, assay, sep = "."),
+	random.seed = random.seed,
+    graph.name = paste("S",reduction, assay, sep = "."),
     verbose = verbose
   )
   return(obj)
