@@ -1,0 +1,146 @@
+---
+title: "R Notebook of E14 downstream analysis from binarized peak level data with "
+output: html_notebook
+---
+# R Packages
+
+```{r Load packagies, include=FALSE}
+.libPaths(c("/projappl/project_2001539/r411_packages", .libPaths()))
+libpath <- .libPaths()[1]
+
+library(Seurat)
+library(Signac)
+library(GenomicRanges)
+library(tidyverse)
+library(future)
+library(qs)
+
+set.seed(2020);
+```
+
+# Reading datafiles
+
+```{r Setwd sample name specific variables, message=FALSE}
+sample.name <- "E14"
+run.date <- "200922"
+cores=10
+std.aim <- 0.15
+```
+
+```{r Setting Seurat multicore}
+plan("multisession", workers = cores)
+options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
+```
+
+```{r Reading in data objects}
+s.data <- readRDS(paste("../scATAC_data/",sample.name,".merged.peaks.298622.Rds",sep=""))
+s.data_RNA <- readRDS("../scRNA_data/E14scRNAseq.300822.Rds")
+```
+
+```{r}
+s.data <- AddMetaData(object = s.data, metadata = str_extract(colnames(s.data), pattern = "[a-z]{2}_\\d{1}|[r1]{2}_\\d{1}"), col.name = "brain_region.replicate")
+s.data <- AddMetaData(object = s.data, metadata = str_extract(colnames(s.data), pattern = "[a-z]{2}|[r1]{2}"), col.name = "brain_region")
+```
+
+```{r TFIDF and SVD, message=FALSE}
+DefaultAssay(s.data) <- 'peaks'
+
+set.seed(2020)
+
+s.data <- RunTFIDF(s.data, method=3)
+s.data <- FindTopFeatures(s.data, min.cutoff = 'q5')
+s.data <- RunSVD(
+  object = s.data,
+  assay = 'peaks',
+  reduction.key = 'LSI_',
+  reduction.name = 'lsi',
+  n=60
+)
+```
+
+```{r Plot depth dimension correlation}
+DepthCor(s.data)
+```
+
+```{r Calculate proportion of stdebv covered by LSI components in comparison to 2}
+std.proportion <- sapply(2:length(s.data@reductions$lsi@stdev),function(x){s.data@reductions$lsi@stdev[x]/s.data@reductions$lsi@stdev[2]})
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim <- which.min(abs(std.proportion-std.aim))
+```
+
+# scATAC UMAP clusters
+
+```{r UMAP and community detection, fig.width=14, fig.height=14}
+# Initial UMAP
+s.data <- RunUMAP(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim)
+s.data <- FindNeighbors(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim)
+suppressWarnings(s.data <- FindClusters(object = s.data, verbose = FALSE, algorithm = 4, resolution = 4))
+DimPlot(object = s.data, label = TRUE, pt.size=1.2, label.size = 8) + NoLegend()
+```
+
+```{r Plot replicate distribution, fig.width=14, fig.height=14}
+DimPlot(object = s.data, label = TRUE, pt.size=.8,group.by="replicate", shuffle =TRUE, label.size = 8) + NoLegend()
+```
+
+```{r Switch Fragment file paths}
+frag.base.path <- "/users/kilpinen/prj_2001539/SAMI/FragmentFiles/"
+
+frag.obj <- Fragments(s.data)
+
+frag.obj[[1]] <- UpdatePath(frag.obj[[1]], paste(frag.base.path,"e14di_data/scATAC/E14DI1_0/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+frag.obj[[2]] <- UpdatePath(frag.obj[[2]], paste(frag.base.path,"e14di_data/scATAC/E14DI1_1/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+frag.obj[[3]] <- UpdatePath(frag.obj[[3]], paste(frag.base.path,"e14di_data/scATAC/E14DI1_2/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+
+frag.obj[[4]] <- UpdatePath(frag.obj[[4]], paste(frag.base.path,"e14vr1_data/scATAC/E14vR1_0/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+frag.obj[[5]] <- UpdatePath(frag.obj[[5]], paste(frag.base.path,"e14vr1_data/scATAC/E14vR1_1/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+frag.obj[[6]] <- UpdatePath(frag.obj[[6]], paste(frag.base.path,"e14vr1_data/scATAC/E14vR1_2/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+
+frag.obj[[7]] <- UpdatePath(frag.obj[[7]], paste(frag.base.path,"e14vmb1_data/scATAC/E14VMB_0/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+frag.obj[[8]] <- UpdatePath(frag.obj[[8]], paste(frag.base.path,"e14vmb1_data/scATAC/E14VMB_1/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+frag.obj[[9]] <- UpdatePath(frag.obj[[9]], paste(frag.base.path,"e14vmb1_data/scATAC/E14VMB_2/outs/fragments.filtered.tsv.gz",sep=""), verbose = TRUE)
+
+Fragments(s.data) <- NULL
+Fragments(s.data) <- frag.obj
+```
+
+
+# RNA activity estimation
+
+```{r Create estimated gene activity assay}
+# Let's extract genomic annotation metadata from s.data[['peaks']]
+genomic.metadata <- mcols(Annotation(s.data[['peaks']]))
+# Generate conversion table from gene_name to gene_id
+gene_name2gene_id <- as_tibble(genomic.metadata[,c("gene_name","gene_id")])
+
+# Calculate gene activity estimate from scATAC reads based on the scATAC, by using gene_names as function does not support any other id
+gene.activities <- GeneActivity(s.data, assay="peaks")
+
+# Store gene_names
+gene.names <- rownames(gene.activities)
+
+# Switch sparse matrix to use ensmusg id
+ensmusg.ids <- gene_name2gene_id[match(gene.names,pull(gene_name2gene_id,"gene_name")),] %>% pull("gene_id")
+gene_names <- gene_name2gene_id[match(gene.names,pull(gene_name2gene_id,"gene_name")),] %>% pull("gene_name")
+
+# Dropping NAs
+non.na.i <- !is.na(ensmusg.ids)
+gene.activities.gene_id <- gene.activities[non.na.i,]
+rownames(gene.activities.gene_id) <- ensmusg.ids[non.na.i]
+
+# Add the gene activity matrix to the Seurat object as a new assay
+s.data[['Activity']] <- CreateAssayObject(counts = gene.activities.gene_id)
+s.data <- NormalizeData(
+  object = s.data,
+  assay = 'Activity',
+  normalization.method = 'LogNormalize',
+  scale.factor = median(s.data$nCount_Activity)
+)
+
+# Add gene_name to gene_id mapping into the s.data[['Activity']] assays metadata
+s.data[['Activity']]<- AddMetaData(s.data[['Activity']], col.name = "feature_symbol", metadata = gene_names[non.na.i])
+```
+
+```{r Save temp version}
+qsave(s.data, file = "../scATAC_data/E14_merged_temp.qs", nthreads = 6)
+```
