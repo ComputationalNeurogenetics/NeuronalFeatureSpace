@@ -14,7 +14,7 @@ library(GenomicRanges)
 library(tidyverse)
 library(future)
 library(qs)
-
+max.lsi.dim
 set.seed(2020);
 ```
 
@@ -34,7 +34,6 @@ options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onM
 
 ```{r Reading in data objects}
 s.data <- readRDS(paste("../scATAC_data/",sample.name,".merged.peaks.298622.Rds",sep=""))
-s.data_RNA <- readRDS("../scRNA_data/E14scRNAseq.300822.Rds")
 ```
 
 ```{r}
