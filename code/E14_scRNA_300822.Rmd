@@ -68,7 +68,7 @@ mb.feature.data.repl2 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e
 ```
 
 ```{r Merging Seurat objects}
-s.data_RNA<- merge(x = di.s.repl1, y = list(di.s.repl2,r1.s.repl1, r1.s.repl2, mb.s.repl1, mb.s.repl2), add.cell.ids = c( "di.repl1", "di.repl2", "r1.repl1", "r1.replt2", "mb.repl1", "mb.repl2"), project = "e14.rna.data")
+s.data_RNA<- merge(x = di.s.repl1, y = list(di.s.repl2,r1.s.repl1, r1.s.repl2, mb.s.repl1, mb.s.repl2), add.cell.ids = c( "di.repl1", "di.repl2", "r1.repl1", "r1.repl2", "mb.repl1", "mb.repl2"), project = "e14.rna.data")
 ```
 
 ```{r Adding feature metadata after merge}
@@ -132,25 +132,25 @@ s.data_RNA <- RunPCA(s.data_RNA, features = VariableFeatures(object = s.data_RNA
 ```
 
 ```{r Calculate JackStraw data}
-s.data_RNA <- JackStraw(s.data_RNA, num.replicate = 10, dims = 20)
-s.data_RNA <- ScoreJackStraw(s.data_RNA, dims = 1:20)
+#s.data_RNA <- JackStraw(s.data_RNA, num.replicate = 25, dims = 50)
+#s.data_RNA <- ScoreJackStraw(s.data_RNA, dims = 1:50)
 ```
 
 ```{r Plot Jackstraw plot}
-JackStrawPlot(s.data_RNA, dims = 1:20)
+#JackStrawPlot(s.data_RNA, dims = 1:50)
 ```
 
 ```{r Draw Elbowplot}
-ElbowPlot(s.data_RNA, ndims=30)
+ElbowPlot(s.data_RNA, ndims=50)
 ```
 
 ```{r Find neighbours and clusters}
-s.data_RNA <- FindNeighbors(s.data_RNA, dims = 1:20)
+s.data_RNA <- FindNeighbors(s.data_RNA, dims = 1:30)
 s.data_RNA <- FindClusters(s.data_RNA, resolution = 2)
 ```
 
 ```{r RunUMAP}
-s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:20, spread=1.5)
+s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:30, spread=1.5)
 ```
 
 ```{r Draw DimPlot}
@@ -194,10 +194,10 @@ create_dt(top20.markers)
 Table of top 20 markers per cluster
 
 ```{r Saving Seurat object for further use}
-saveRDS(s.data_RNA, file = paste("../scRNA/",sample.name,"scRNAseq.",run.date,".Rds", sep=""))
+saveRDS(s.data_RNA, file = paste("../scRNA_data/",sample.name,"scRNAseq.",run.date,".Rds", sep=""))
 ```
 
 
-```{r}
+```{r sessionInfo}
 sessionInfo()
 ```
