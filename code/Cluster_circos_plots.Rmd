@@ -1,0 +1,239 @@
+---
+title: "R Notebook of plotting cluster level circos plots"
+output: html_notebook
+---
+
+```{r Libraries, include=FALSE}
+library(Seurat)
+library(Signac)
+library(tidyverse)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(RColorBrewer)
+library(future)
+library(GenomicRanges)
+library(EnsDb.Mmusculus.v79)
+library(dendextend)
+library(DT)
+library(ChIPpeakAnno)
+library(Repitools)
+library(BiocManager)
+library(ChIPseeker)
+library(circlize)
+library(ComplexHeatmap)
+library(dendextend)
+library(fpc)
+library(ggsci)
+library(qs)
+source("../../generic code/AuxFunctions.R")
+```
+
+```{r Read E14 merged data}
+#s.data.e14 <- qread("../scATAC_data/s.data.res3.8.qs", nthreads = 6)
+#s.data.e14 <- qread("../scATAC_data/s.data.res13.qs", nthreads = 6)
+s.data.e14 <- readRDS("../scATAC_data/E14_DownstreamReady.200922.RNA.pos.idents.Rds")
+```
+
+```{r UMAP with brain regions, fig.width=10, fig.height=8}
+DimPlot(s.data.e14, group.by = 'brain_region', pt.size = 0.1) + ggtitle("Brain region") + coord_fixed()
+```
+
+```{r Plot NT type UMAP, fig.width=10, fig.height=8}
+DimPlot(s.data.e14, group.by = 'NT.type', pt.size = 0.1) + ggtitle("Neurotransmitter type") + coord_fixed()
+```
+
+```{r Plot clustering reliability, fig.width=10, fig.height=8}
+FeaturePlot(s.data.e14, features = 'silh.score', pt.size = 0.1, cols=c("orange","darkgreen")) + ggtitle("Cluster reliability") + coord_fixed()
+```
+
+
+```{r Calculate NT type counts and proportions}
+nt.type.counts <- table(data.frame(Idents(s.data.e14),s.data.e14$NT.type))
+nt.type.prop <- apply(nt.type.counts,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+```
+
+
+```{r Calculate brain region counts and proportions}
+brain.region.counts <- table(data.frame(Idents(s.data.e14),s.data.e14$brain_region))
+brain.region.prop <- apply(brain.region.counts,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+```
+
+
+```{r Calculate dendrogram of all clusters}
+e14.cluster.averages <- AverageExpression(s.data.e14, assays="peaks")
+cell.dist.e14 <- proxy::dist(e14.cluster.averages$peaks, method="cosine", by_rows=FALSE)
+hclust_cells_e14 <- hclust(cell.dist.e14, method="ward.D2")
+hcd_e14 <- as.dendrogram(hclust_cells_e14)
+hcd_e14 <- hcd_e14 %>% set("branches_lwd", 8)
+
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[1] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[1]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[2] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[2]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[3] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[3]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[4] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[4]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[5] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[5]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[6] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[6]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[7] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col",pal_jco()(8)[7]
+#   )
+# 
+# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
+#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[8] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
+#     type="all", attr="col", pal_jco()(8)[8]
+#   )
+```
+
+
+```{r Plot all cluster dendrogam with Circos, fig.width=24, fig.height=24}
+#hcd.upper.circ  <- hcd.upper
+circos.clear()
+par(mar = rep(4,4))
+
+circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_e14))))
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.text(1:length(labels(hcd_e14))-0.5, rep(0, length(labels(hcd_e14))), labels(hcd_e14), col = labels_colors(hcd_e14),
+               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.5)
+}, bg.border = NA, track.height = 0.15)
+max_height = attr(hcd_e14, "height")
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(value=t(brain.region.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(brain.region.counts)-0.5, col=pal_d3("category20")(4))
+}, track.height =.15, bg.border = NA)
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(value=t(nt.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(8))
+}, track.height =.15, bg.border = NA)
+
+circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
+   circos.dendrogram(hcd_e14, max_height = max_height)
+}, track.height =.45, bg.border = NA)
+
+
+lgd_barplot = packLegend(
+   Legend(at = colnames(t(nt.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_jco()(8), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Neurotransmitter type", size = unit(4, "mm")),
+      Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
+     )
+# 
+draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+
+circos.clear()
+```
+
+# GABA only
+
+```{r}
+# Take all GABA cells
+GABA.clusters <- cell.types %>% dplyr::filter(Neurotransmitter=="GABAergic neurons" & `Brain region` %in% c("DI","MB","R1")) %>% pull(`Cluster id`) %>% str_replace(pattern="^e14","")
+GABA.e14.data <- subset(s.data.e14, idents=GABA.clusters)
+# Draw circos plot of their dendrogram, highlight all DA regions somehow
+```
+
+```{r GABA selector averages}
+s.data.di<-RenameGenesSeurat(s.data.di,s.data.di[["RNA"]]@meta.features[,1])
+DefaultAssay(s.data.di) <- "RNA_name"
+di.avg <- AverageExpression(s.data.di)
+
+s.data.mb<-RenameGenesSeurat(s.data.mb,s.data.mb[["RNA"]]@meta.features[,1])
+DefaultAssay(s.data.mb) <- "RNA_name"
+mb.avg <- AverageExpression(s.data.mb)
+
+s.data.e14r1<-RenameGenesSeurat(s.data.e14r1,s.data.e14r1[["RNA"]]@meta.features[,1])
+DefaultAssay(s.data.e14r1) <- "RNA_name"
+r1.avg <- AverageExpression(s.data.e14r1)
+
+GABA.fate.selectors <- c("Tal1","Dlx1","Dlx2")
+```
+
+
+```{r Recalculate GABA only scATAC UMAP}
+GABA.e14.data <- RunTFIDF(GABA.e14.data)
+GABA.e14.data <- FindTopFeatures(GABA.e14.data, min.cutoff = 20)
+GABA.e14.data <- RunSVD(GABA.e14.data)
+GABA.e14.data <- RunUMAP(GABA.e14.data, dims = 2:50, reduction = 'lsi')
+DimPlot(GABA.e14.data, group.by = 'ident', pt.size = 0.5)
+# TODO: Switch this to Cell type labels
+```
+
+```{r}
+GABA.cluster.averages <- AverageExpression(GABA.e14.data, assays="peaks")
+cell.dist.gaba <- proxy::dist(GABA.cluster.averages$peaks, method="cosine", by_rows=FALSE)
+hclust_cells.gaba <- hclust(cell.dist.gaba, method="ward.D2")
+hcd_gaba <- as.dendrogram(hclust_cells.gaba)
+```
+
+```{r}
+cluster.order <- labels(hcd_gaba)
+di.clusters <- cluster.order[grepl(cluster.order, pattern = "di.*")] %>% str_remove("di.") %>% as.numeric()
+mb.clusters <- cluster.order[grepl(cluster.order, pattern = "mb.*")] %>% str_remove("mb.") %>% as.numeric()
+r1.clusters <- cluster.order[grepl(cluster.order, pattern = "r1.*")] %>% str_remove("r1.") %>% as.numeric()
+
+di.selector.exp <- di.avg$RNA_name[GABA.fate.selectors,di.clusters]
+colnames(di.selector.exp) <- paste("di.",colnames(di.selector.exp),sep="")
+
+mb.selector.exp <- mb.avg$RNA_name[GABA.fate.selectors,mb.clusters]
+colnames(mb.selector.exp) <- paste("mb.",colnames(mb.selector.exp),sep="")
+
+r1.selector.exp <- r1.avg$RNA_name[GABA.fate.selectors,r1.clusters]
+colnames(r1.selector.exp) <- paste("r1.",colnames(r1.selector.exp),sep="")
+
+combined.sel.exp <- cbind(di.selector.exp,mb.selector.exp,r1.selector.exp)[,cluster.order]
+
+col_fun = colorRamp2(c(min(combined.sel.exp), 0, max(combined.sel.exp)), c("red", "white", "green"))
+```
+
+
+```{r Draw GABA only circos dendrogram, fig.height=6, fig.width=6}
+circos.clear()
+par(mar = rep(4,4))
+circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_gaba))))
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.text(1:length(labels(hcd_gaba))-0.5, rep(0, length(labels(hcd_gaba))), labels(hcd_gaba), col = labels_colors(hcd_gaba),
+               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1)
+}, bg.border = NA, track.height = 0.15)
+max_height = attr(hcd_gaba, "height")
+
+circos.heatmap(as.matrix(t(combined.sel.exp)), cluster=FALSE, col = col_fun,  dend.side="none")
+
+circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
+   circos.dendrogram(hcd_gaba, max_height = max_height)
+}, track.height =.40, bg.border = NA)
+
+
+
+circos.clear()
+
+```
+

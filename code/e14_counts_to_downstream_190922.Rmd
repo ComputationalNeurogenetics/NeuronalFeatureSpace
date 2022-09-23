@@ -5,11 +5,6 @@ output: html_notebook
 # R Packages
 
 ```{r Load packagies, include=FALSE}
-if (Sys.info()['sysname']=="Linux") {
-    .libPaths(c("/projappl/project_2001539/project_rpackages", .libPaths()))
-    libpath <- .libPaths()[1]
-}
-
 load.libs <- c(
   "viridisLite",
   "DT",
@@ -66,7 +61,7 @@ set.seed(2020);
 
 ```{r Setwd sample name specific variables, message=FALSE}
 sample.name <- "E14"
-run.date <- "190922"
+run.date <- "200922"
 supp_data_path <- "~/Workspace/mm10/"
 cores=6
 std.aim <- 0.15
@@ -93,7 +88,7 @@ DefaultAssay(s.data) <- 'peaks'
 set.seed(2020)
 
 s.data <- RunTFIDF(s.data, method=3)
-s.data <- FindTopFeatures(s.data, min.cutoff = 'q5')
+s.data <- FindTopFeatures(s.data, min.cutoff = 'q0')
 s.data <- RunSVD(
   object = s.data,
   assay = 'peaks',
@@ -165,7 +160,8 @@ s.data[['Activity']]<- AddMetaData(s.data[['Activity']], col.name = "feature_sym
 ```
 
 ```{r Save temp version}
-qsave(s.data, file = "../scATAC_data/E14_merged_temp.qs", nthreads = 6)
+#qsave(s.data, file = "../scATAC_data/E14_merged_temp.qs", nthreads = 6)
+s.data <- qread("../scATAC_data/E14_merged_temp.qs", nthreads = 6)
 ```
 
 ```{r Read marker gene list and do FeaturePlot based on gene activity, fig.height=20, fig.width=20, message=FALSE}
@@ -366,7 +362,7 @@ s.data[['All_ATAC_idents']] <- Idents(s.data)
 source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
 source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
 
-NT.type.markers <- gene_set_prepare2("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/onlyNT_markers280722.xlsx", "Brain")
+NT.type.markers <- gene_set_prepare2("../onlyNT_markers280722.xlsx", "Brain")
 
 #Renaming genes as gene names instead of ENSMUSG IDs
 s.data<-RenameGenesSeurat(s.data,s.data[["RNA"]]@meta.features[,1])
@@ -404,7 +400,7 @@ s.data <- AddMetaData(object=s.data,metadata = apply(es.max,2,function(x){names(
 DefaultAssay(s.data) <- "peaks"
 
 s.data <- RunTFIDF(s.data, method=3)
-s.data <- FindTopFeatures(s.data, min.cutoff = 'q5')
+s.data <- FindTopFeatures(s.data, min.cutoff = 'q0')
 s.data <- RunSVD(
   object = s.data,
   assay = 'peaks',
@@ -423,8 +419,8 @@ max.lsi.dim.re <- which.min(abs(std.proportion-std.aim))
 
 ```{r Recalculate UMAP after filtering cells based on RNA integration score}
 s.data <- RunUMAP(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim.re)
-s.data <- FindNeighbors(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim.re, graph.name = c("S.lsi.peaks","N.lsi.peaks"))
-qsave(s.data, file="../scATAC_data/s.data.merged.for.chooseR.qs", nthreads = 6)
+s.data <- FindNeighbors(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim.re, graph.name = c("N.lsi.peaks","S.lsi.peaks"))
+#qsave(s.data, file="../scATAC_data/s.data.merged.for.chooseR_q0.qs", nthreads = 6)
 ```
 
 ```{r Calculate optimal r with chooseR on HPC side}
@@ -434,18 +430,18 @@ qsave(s.data, file="../scATAC_data/s.data.merged.for.chooseR.qs", nthreads = 6)
 # Summarize results with chooseR_results.R
 
 # Read scores into current R process
-scores <- readRDS("../chooseR/results_leiden/scores.Rds")
+scores <- readRDS("../chooseR/results_leiden_100_q0/scores.Rds")
 
 # Add cluster specific silhouette scores as metadata to s.data? Is there cell specific? Check publication
-
+s.data <- AddMetaData(object = s.data, metadata = scores$avg_sil[match(as.numeric(s.data$S.lsi.peaks_res.12), scores$cluster)], col.name = "silh.score")
 ```
 
 
 ```{r Recalculate community detection with chosen r, fig.height=16, fig.width=16}
-r <- 13
+r <- 12
 suppressWarnings(s.data <- FindClusters(object = s.data, verbose = FALSE, algorithm = 4, resolution = r, random.seed=2020, reduction="lsi", graph.name = "S.lsi.peaks"))
 
-DimPlot(object = s.data, label = TRUE, pt.size=.6, label.size = 2) + NoLegend()
+DimPlot(object = s.data, label = TRUE, pt.size=1, label.size = 6) + NoLegend() + coord_fixed()
 ```
 
 ```{r Calculate confusion table with NT types and cluster labels}
@@ -455,7 +451,7 @@ create_dt(as.data.frame.matrix(NT.conf.table))
 ```
 
 # Plot marker gene FeaturePlots with imputed scRNA data
-res_13
+
 ```{r Plot marker gene FeaturePlots with imputed scRNA data, fig.height=20, fig.width=20, cache=TRUE, message=FALSE}
 DefaultAssay(s.data) <- "RNA_name"
 neuronal.markers<- read_tsv("../../CellAnnotation/CellTypeMarkers_E14.tsv", col_names = c("annotation","geneName"))
@@ -514,16 +510,21 @@ cus.neur.gini <- apply(marker.mean$mean.by.cluster[,-1],2,gini)
 
 gini.tb<-tibble(gini.index=c(cus.hk.gini,cus.neur.gini),type=c(rep("hk",length(cus.hk.gini)),rep("neur",length(cus.neur.gini)))) %>%  dplyr::filter(!is.na(gini.index))
 
-ggplot(gini.tb, aes(x=gini.index,y=type,fill="blue"))+geom_boxplot(fill="lightblue")+ theme(legend.position="none") + theme_classic()
+ggplot(gini.tb, aes(x=gini.index,y=type,fill="blue"))+geom_boxplot(fill="lightblue")+ theme(legend.position="none") + theme_classic() + theme(text=element_text(size=16))
 ```
 
 # Calculate pairwise DA chromating between all pairs of clusters
 
-```{r}
-# Calculate with DA_chromatin.R in HPC cluster and read results
-da_features_13 <- qread("../scATAC_data/da_features_13.qs", nthreads = 6)
+```{r Calculate with DA_features_pairwise.R in HPC cluster}
+qsave(s.data, file="../scATAC_data/s.data.res12.qs", nthreads = 6)
+```
 
-da_bp_13 <- lapply(da_features_13,function(da.1){
+
+```{r}
+# Read results
+da_features <- qread("../scATAC_data/da_features_12.qs", nthreads = 6)
+
+da_bp <- lapply(da_features,function(da.1){
   lapply(da.1, function(da.2){
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
@@ -539,13 +540,13 @@ da_bp_13 <- lapply(da_features_13,function(da.1){
   })
 })
 
-dalength.matrix.13 <- sapply(da_bp_13, unlist)/1000
-rownames(dalength.matrix.13) <- as.character(seq(1,nrow(dalength.matrix.13),by=1))
-colnames(dalength.matrix.13) <- as.character(seq(1,ncol(dalength.matrix.13),by=1))
+dalength.matrix <- sapply(da_bp, unlist)/1000
+rownames(dalength.matrix) <- as.character(seq(1,nrow(dalength.matrix),by=1))
+colnames(dalength.matrix) <- as.character(seq(1,ncol(dalength.matrix),by=1))
 ```
 
 ```{r Pairwise chromatin DA count}
-da_count_13 <- lapply(da_features_13,function(da.1){
+da_count <- lapply(da_features,function(da.1){
   lapply(da.1, function(da.2){
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
@@ -560,25 +561,26 @@ da_count_13 <- lapply(da_features_13,function(da.1){
   })
 })
 
-dacount.matrix.13 <- sapply(da_count_13, unlist)
-rownames(dacount.matrix.13) <- as.character(seq(1,nrow(dacount.matrix.13),by=1))
-colnames(dacount.matrix.13) <- as.character(seq(1,ncol(dacount.matrix.13),by=1))
+dacount.matrix <- sapply(da_count, unlist)
+rownames(dacount.matrix) <- as.character(seq(1,nrow(dacount.matrix),by=1))
+colnames(dacount.matrix) <- as.character(seq(1,ncol(dacount.matrix),by=1))
 ```
 
 ```{r Draw clustered heatmap of pairwise DA results, fig.width=18, fig.height=18}
-col_fun = colorRamp2(c(0, median(dalength.matrix.13),max(dalength.matrix.13)), c("white","yellow", "red"))
-Heatmap(dalength.matrix.13, col = col_fun, clustering_distance_rows = "euclidean", clustering_distance_columns = "euclidean", clustering_method_rows = "ward.D2", clustering_method_columns = "ward.D2", heatmap_legend_param = list(legend_height = unit(6, "cm"),grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)))
+col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("white","yellow", "red"))
+
+Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)), cluster_rows=TRUE, cluster_columns = TRUE)
 ```
 
 ```{r Histogram of DA feature chromatin kbp level}
-hist(dalength.matrix.13[upper.tri(dalength.matrix.13)], main = "Histogram of DA feature lengths between all clusters", xlab = "kbp")
+hist(dalength.matrix[upper.tri(dalength.matrix)], main = "Histogram of DA feature lengths between all clusters", xlab = "kbp")
 ```
 ```{r Histogram of DA feature count}
-hist(dacount.matrix.13[upper.tri(dacount.matrix.13)], main = "Histogram of DA feature counts between all clusters", xlab = "Feature count")
+hist(dacount.matrix[upper.tri(dacount.matrix)], main = "Histogram of DA feature counts between all clusters", xlab = "Feature count")
 ```
 # Adding Motif information into the object
 
-```{r Adding Motif information to the object, echo=FALSE}
+```{r Adding Motif information to the object, echo=FALSE, message=FALSE}
 Hocomocov11 <- read_jaspar("../../mm10/HOCOMOCOv11_core_MOUSE_mono_jaspar_format.txt")
 names(Hocomocov11) <- lapply(Hocomocov11,function(x){x@name})
 Hocomocov11 <- convert_motifs(Hocomocov11, "TFBSTools-PWMatrix")
@@ -650,6 +652,7 @@ save(list=c("top.markers_rna","top.markers_atac","top.markers_chromvar","top.mar
 
 ```{r Saving data for downstream analyses}
 saveRDS(s.data,paste("../scATAC_data/",sample.name,"_DownstreamReady.",run.date,".RNA.pos.idents.Rds",sep=""))
+qsave(s.data,paste("../scATAC_data/",sample.name,"_DownstreamReady.",run.date,".RNA.pos.idents.qs",sep=""), nthreads = 6)
 ```
 
 ```{r Saving data for downstream analyses slim}
