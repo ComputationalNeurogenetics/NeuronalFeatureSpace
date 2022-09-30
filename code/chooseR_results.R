@@ -7,7 +7,7 @@ setwd("~/Workspace/NeuronalFeatureSpace/chooseR")
 resolutions <- c(seq(1,20,by=1))
 #assay <- "peaks"
 #reduction <- "lsi"
-results_path <- "./results_leiden_100_q0//"
+results_path <- "./results_leiden_scRNA_270922/"
 
 source("./R/pipeline.R")
 # Create silhouette plot
@@ -49,7 +49,7 @@ ggplot(meds, aes(x=1:20)) + geom_line(aes(y=min.cell.count, colour="Min")) + geo
 threshold <- max(meds$low_med)
 choice <- as.character(
   meds %>%
-    dplyr::filter(med >= threshold & min.cell.count >= 20) %>%
+    dplyr::filter(med >= threshold & min.cell.count >= 15) %>%
     dplyr::arrange(n_clusters) %>%
     tail(n = 1) %>%
     dplyr::pull(res)
@@ -133,5 +133,5 @@ scores.out <- scores %>%
   dplyr::arrange(dplyr::desc(avg_sil)) %>%
   dplyr::mutate_at("cluster", ordered, levels = .$cluster)
 
-saveRDS(scores.out,file="./results_leiden_100_q0/scores.Rds")
+saveRDS(scores.out,file=paste(results_path,"scores.Rds",sep=""))
 

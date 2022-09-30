@@ -12,6 +12,7 @@ library(org.Mm.eg.db);
 library(randomcoloR);
 library(DT);
 library(data.table);
+library(qs)
 source("../../generic code/AuxFunctions.R");
 ```
 
@@ -144,18 +145,52 @@ s.data_RNA <- RunPCA(s.data_RNA, features = VariableFeatures(object = s.data_RNA
 ElbowPlot(s.data_RNA, ndims=50)
 ```
 
-```{r Find neighbours and clusters}
-s.data_RNA <- FindNeighbors(s.data_RNA, dims = 1:30)
-s.data_RNA <- FindClusters(s.data_RNA, resolution = 2)
+```{r Calculate how many dimensions to take}
+std.aim <- 0.15
+std.proportion <- sapply(1:length(s.data_RNA@reductions$pca@stdev),function(x){s.data_RNA@reductions$pca@stdev[x]/s.data_RNA@reductions$pca@stdev[2]})
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim <- which.min(abs(std.proportion-std.aim))
 ```
 
 ```{r RunUMAP}
-s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:30, spread=1.5)
+s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:max.lsi.dim, spread=1.5)
 ```
 
-```{r Draw DimPlot}
+```{r Save data for chooseR interation}
+qsave(s.data_RNA, file="../scRNA_data/E14_scRNA_for_chooseR.qs", nthreads = 6)
+# Run choose_R_serverside_scRNA.R to iterate for optimal resolution
+```
+
+
+```{r Find neighbours and clusters, message=FALSE}
+reduction <- "pca"
+assay <- "RNA"
+resolution <- 3
+algorithm <- 4
+random.seed <- 2020
+s.data_RNA <- Seurat::FindNeighbors(
+    s.data_RNA,
+    dims = 1:max.lsi.dim,
+    graph.name = c(paste("N",reduction, assay, sep = "."),paste("S",reduction, assay, sep = "."))
+)
+
+s.data_RNA <- Seurat::FindClusters(
+    s.data_RNA,
+	algorithm = algorithm,
+    resolution = resolution,
+	random.seed = random.seed,
+    graph.name = paste("S",reduction, assay, sep = "."),
+    verbose = FALSE
+  )
+
+```
+
+
+
+```{r Draw DimPlot, fig.height=10, fig.width=10}
 palette <- distinctColorPalette(length(levels(Idents(s.data_RNA))))
-DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette)
+DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette) + coord_fixed()
 ```
 
 ```{r Some validation plots, fig.height=24, fig.width=18}
@@ -168,6 +203,52 @@ f1.list <- lapply(1:length(markers.id), function(f){
 
 patchwork::wrap_plots(f1.list)
 ```
+
+
+# Calculate NT typing for cells
+
+```{r NT typing preparation}
+source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
+source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
+
+NT.type.markers <- gene_set_prepare2("../onlyNT_markers280722.xlsx", "Brain")
+
+#Renaming genes as gene names instead of ENSMUSG IDs
+s.data_RNA<-RenameGenesSeurat(s.data_RNA,s.data_RNA[["RNA"]]@meta.features[,1])
+DefaultAssay(s.data_RNA) <- 'RNA_name'
+
+#Creating scores for artificial genes: s & g2m
+s.data_RNA <- CellCycleScoring(
+  object = s.data_RNA,
+  g2m.features = str_to_title(cc.genes$g2m.genes),
+  s.features = str_to_title(cc.genes$s.genes),
+  search=TRUE
+)
+
+#Getting the expression data from the seurat object
+exp.matr <- as.matrix(s.data_RNA[["RNA_name"]]@data)
+#Adding the two 'genes' in the end of the matrix
+matr <- rbind(exp.matr, s.data_RNA@meta.data$S.Score)
+rownames(matr)[nrow(matr)] <- "S"
+matr <- rbind(matr, s.data_RNA@meta.data$G2M.Score)
+rownames(matr)[nrow(matr)] <- "G2m"
+# scale the data 
+matr <- t(scale(t(matr)))
+```
+
+```{r Calculating NT type estimation per cell}
+# Getting cell-type by cell matrix.
+es.max <- sctype_score(scRNAseqData = matr, scaled = TRUE, gs = NT.type.markers$gs_positive, gs2 = NT.type.markers$gs_negative)
+
+s.data_RNA <- AddMetaData(object=s.data_RNA,metadata = apply(es.max,2,function(x){names(which.max(x))}), col.name = "NT.type")
+```
+
+```{r Draw DimPlot with NT-types, fig.height=10, fig.width=10}
+palette <- distinctColorPalette(length(unique(s.data_RNA$NT.type)))
+DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette, group.by = "NT.type") + coord_fixed()
+```
+
+
 
 ```{r Find all markers}
 all.markers <- tibble(FindAllMarkers(s.data_RNA, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25))

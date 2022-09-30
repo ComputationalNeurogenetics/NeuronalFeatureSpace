@@ -24,8 +24,89 @@ library(dendextend)
 library(fpc)
 library(ggsci)
 library(qs)
-source("../../generic code/AuxFunctions.R")
+library(TFBSTools)
+library(chromVAR)
+library(universalmotif)
+#source("../../generic code/AuxFunctions.R")
 ```
+
+```{r Prepare Hocomoco motifs for ChromVar, message=FALSE}
+Hocomocov11 <- read_jaspar("../../mm10/HOCOMOCOv11_core_MOUSE_mono_jaspar_format.txt")
+names(Hocomocov11) <- lapply(Hocomocov11,function(x){x@name})
+Hocomocov11 <- convert_motifs(Hocomocov11, "TFBSTools-PWMatrix")
+PWMs <- do.call(PWMatrixList,Hocomocov11)
+```
+
+
+```{r Extra functions}
+prepare_comp_circos_data <- function(da_features=da_features, id.1, id.2, avg_log2FC.limit=0.75){
+  
+feat.1 <- DA_feats(da.features = da_features, id.1=id.1, id.2=id.2, avg_log2FC.limit = 0.75)
+feat.2 <- DA_feats(da.features = da_features, id.1=id.2, id.2=id.1, avg_log2FC.limit = 0.75)
+
+dat.1 <- map(feat.1, function(x) {
+    tmp <- unlist(str_split(x, pattern = "-"))
+    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=46) 
+}) %>% bind_rows() %>% mutate_at(c("start", "end"), .funs=as.numeric)
+
+dat.2 <- map(feat.2, function(x) {
+    tmp <- unlist(str_split(x, pattern = "-"))
+    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=146) 
+}) %>% bind_rows() %>% mutate_at(c("start", "end"), .funs=as.numeric)
+
+dat <- bind_rows(dat.1, dat.2)
+
+closest.gene.1 <- ClosestFeature(object=GABA.e14.data, regions=feat.1)$gene_name
+closest.gene.2 <- ClosestFeature(object=GABA.e14.data, regions=feat.2)$gene_name
+
+dat$label <- c(closest.gene.1,closest.gene.2)
+dat$color <- ifelse(dat$side==id.1, "red","blue")
+return(dat)
+}
+
+
+DA_feats <- function(da.features, id.1, id.2, avg_log2FC.limit=0.75, p_val_adj_limit = 0.05){
+  da_features[[id.1]][[id.2]] %>% dplyr::filter((avg_log2FC > avg_log2FC.limit) & p_val_adj < p_val_adj_limit) %>% pull(feature)
+}
+
+ChromVar_DA <- function(da.features, id.1, id.2, motifs, seurat.object, genome = BSgenome.Mmusculus.UCSC.mm10){
+
+da_features[[id.1]][[id.2]] %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj < 0.05) %>% pull(feature) -> sub.da.features
+  
+
+  
+tmp.1.motifs <- CreateMotifMatrix(
+  features = StringToGRanges(sub.da.features),
+  pwm = motifs,
+  genome = genome,
+  score = FALSE,
+  use.counts = FALSE,
+  sep = c("-", "-")
+)
+
+seurat.object <- RunChromVAR(
+  object = subset(seurat.object, features=sub.da.features),
+  motif.matrix = tmp.1.motifs,
+  assay="peaks",
+  genome = BSgenome.Mmusculus.UCSC.mm10,
+  new.assay.name = "chromvar.da"
+)
+
+DefaultAssay(seurat.object) <- "chromvar.da"
+markers_chromvar <- FindMarkers(
+  object = seurat.object,
+  only.pos = FALSE,
+  ident.1 = id.1,
+  ident.2 = id.2,
+  test.use = 'LR',
+  latent.vars = 'nCount_peaks'
+) %>% dplyr::filter(p_val_adj <= 0.05 & (avg_log2FC >= 0.5 | avg_log2FC <= -0.5)) %>% rownames_to_column(var="motif.id") %>% as_tibble() %>% arrange(avg_log2FC)
+
+return(markers_chromvar)
+}
+
+```
+
 
 ```{r Read E14 merged data}
 #s.data.e14 <- qread("../scATAC_data/s.data.res3.8.qs", nthreads = 6)
@@ -72,51 +153,10 @@ cell.dist.e14 <- proxy::dist(e14.cluster.averages$peaks, method="cosine", by_row
 hclust_cells_e14 <- hclust(cell.dist.e14, method="ward.D2")
 hcd_e14 <- as.dendrogram(hclust_cells_e14)
 hcd_e14 <- hcd_e14 %>% set("branches_lwd", 8)
-
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[1] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[1]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[2] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[2]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[3] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[3]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[4] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[4]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[5] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[5]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[6] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[6]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[7] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col",pal_jco()(8)[7]
-#   )
-# 
-# hcd_e14 <- hcd_e14 %>% branches_attr_by_labels(
-#     labels=dplyr::filter(nt.data, Neurotransmitter==unique(nt.data$Neurotransmitter)[8] & !grepl(nt.data$cluster, pattern="^e12")) %>% pull(cluster),
-#     type="all", attr="col", pal_jco()(8)[8]
-#   )
 ```
 
 
 ```{r Plot all cluster dendrogam with Circos, fig.width=24, fig.height=24}
-#hcd.upper.circ  <- hcd.upper
 circos.clear()
 par(mar = rep(4,4))
 
@@ -140,12 +180,11 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
    circos.dendrogram(hcd_e14, max_height = max_height)
 }, track.height =.45, bg.border = NA)
 
-
 lgd_barplot = packLegend(
    Legend(at = colnames(t(nt.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_jco()(8), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Neurotransmitter type", size = unit(4, "mm")),
       Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
      )
-# 
+
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
 circos.clear()
@@ -153,87 +192,222 @@ circos.clear()
 
 # GABA only
 
-```{r}
-# Take all GABA cells
-GABA.clusters <- cell.types %>% dplyr::filter(Neurotransmitter=="GABAergic neurons" & `Brain region` %in% c("DI","MB","R1")) %>% pull(`Cluster id`) %>% str_replace(pattern="^e14","")
-GABA.e14.data <- subset(s.data.e14, idents=GABA.clusters)
+```{r Subset all GABA cells}
+GABA.e14.data <- subset(s.data.e14, idents=which(nt.type.prop["GABAergic neurons",]>0.75))
 # Draw circos plot of their dendrogram, highlight all DA regions somehow
 ```
 
 ```{r GABA selector averages}
-s.data.di<-RenameGenesSeurat(s.data.di,s.data.di[["RNA"]]@meta.features[,1])
-DefaultAssay(s.data.di) <- "RNA_name"
-di.avg <- AverageExpression(s.data.di)
-
-s.data.mb<-RenameGenesSeurat(s.data.mb,s.data.mb[["RNA"]]@meta.features[,1])
-DefaultAssay(s.data.mb) <- "RNA_name"
-mb.avg <- AverageExpression(s.data.mb)
-
-s.data.e14r1<-RenameGenesSeurat(s.data.e14r1,s.data.e14r1[["RNA"]]@meta.features[,1])
-DefaultAssay(s.data.e14r1) <- "RNA_name"
-r1.avg <- AverageExpression(s.data.e14r1)
-
-GABA.fate.selectors <- c("Tal1","Dlx1","Dlx2")
+DefaultAssay(s.data.e14) <- "RNA_name"
+GABA.e14.data.avg <- AverageExpression(GABA.e14.data)
+GABA.fate.selectors <- c("Ascl1","Helt","Tal1","Gata2","Gata3","Dlx1","Dlx2")
 ```
 
 
 ```{r Recalculate GABA only scATAC UMAP}
 GABA.e14.data <- RunTFIDF(GABA.e14.data)
-GABA.e14.data <- FindTopFeatures(GABA.e14.data, min.cutoff = 20)
+GABA.e14.data <- FindTopFeatures(GABA.e14.data, min.cutoff = "q0")
 GABA.e14.data <- RunSVD(GABA.e14.data)
-GABA.e14.data <- RunUMAP(GABA.e14.data, dims = 2:50, reduction = 'lsi')
+
+std.proportion <- sapply(2:length(GABA.e14.data@reductions$lsi@stdev),function(x){GABA.e14.data@reductions$lsi@stdev[x]/GABA.e14.data@reductions$lsi@stdev[2]})
+
+std.aim <- 0.15
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim.re <- which.min(abs(std.proportion-std.aim))
+
+GABA.e14.data <- RunUMAP(GABA.e14.data, dims = 2:max.lsi.dim.re, reduction = 'lsi')
 DimPlot(GABA.e14.data, group.by = 'ident', pt.size = 0.5)
 # TODO: Switch this to Cell type labels
 ```
 
 ```{r}
-GABA.cluster.averages <- AverageExpression(GABA.e14.data, assays="peaks")
-cell.dist.gaba <- proxy::dist(GABA.cluster.averages$peaks, method="cosine", by_rows=FALSE)
+cell.dist.gaba <- proxy::dist(GABA.e14.data.avg$peaks, method="cosine", by_rows=FALSE)
 hclust_cells.gaba <- hclust(cell.dist.gaba, method="ward.D2")
 hcd_gaba <- as.dendrogram(hclust_cells.gaba)
 ```
 
 ```{r}
 cluster.order <- labels(hcd_gaba)
-di.clusters <- cluster.order[grepl(cluster.order, pattern = "di.*")] %>% str_remove("di.") %>% as.numeric()
-mb.clusters <- cluster.order[grepl(cluster.order, pattern = "mb.*")] %>% str_remove("mb.") %>% as.numeric()
-r1.clusters <- cluster.order[grepl(cluster.order, pattern = "r1.*")] %>% str_remove("r1.") %>% as.numeric()
-
-di.selector.exp <- di.avg$RNA_name[GABA.fate.selectors,di.clusters]
-colnames(di.selector.exp) <- paste("di.",colnames(di.selector.exp),sep="")
-
-mb.selector.exp <- mb.avg$RNA_name[GABA.fate.selectors,mb.clusters]
-colnames(mb.selector.exp) <- paste("mb.",colnames(mb.selector.exp),sep="")
-
-r1.selector.exp <- r1.avg$RNA_name[GABA.fate.selectors,r1.clusters]
-colnames(r1.selector.exp) <- paste("r1.",colnames(r1.selector.exp),sep="")
-
-combined.sel.exp <- cbind(di.selector.exp,mb.selector.exp,r1.selector.exp)[,cluster.order]
-
-col_fun = colorRamp2(c(min(combined.sel.exp), 0, max(combined.sel.exp)), c("red", "white", "green"))
+e14.selector.exp <- as.matrix(t(scale(GABA.e14.data.avg$RNA_name[GABA.fate.selectors,cluster.order])))
+col_fun = colorRamp2(c(min(e14.selector.exp), 0, max(e14.selector.exp)), c("blue", "white", "red"))
 ```
 
 
-```{r Draw GABA only circos dendrogram, fig.height=6, fig.width=6}
+```{r Draw GABA only circos dendrogram, fig.height=14, fig.width=14}
 circos.clear()
-par(mar = rep(4,4))
-circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_gaba))))
+par(mar = rep(3,4))
+#circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_gaba))))
+
+circos.par(gap.after = c(10))
+
+circos.heatmap(e14.selector.exp, cluster=FALSE, col = col_fun,  dend.side="none",cell.border = "black", rownames.side = "outside", rownames.cex=2)
+
+#circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+#circos.text(1:length(labels(hcd_gaba))-0.5, rep(0, length(labels(hcd_gaba))), labels(hcd_gaba), col = labels_colors(hcd_gaba), facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1)
+#}, bg.border = NA, track.height = 0.15)
+
+#max_height = attr(hcd_gaba, "height")
+
+circos.track(track.index = get.current.track.index(), panel.fun = function(x, y) {
+    if(CELL_META$sector.numeric.index == 1) { # the last sector
+        cn = rev(colnames(e14.selector.exp))
+        n = length(cn)
+        circos.text(rep(CELL_META$cell.xlim[2], n) + convert_x(1, "mm"), 
+            1:n - 0.5, cn, 
+            cex = 2, adj = c(0, 0.5), facing = "inside")
+    }
+}, bg.border = NA)
+
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:length(labels(hcd_gaba))-0.5, rep(0, length(labels(hcd_gaba))), labels(hcd_gaba), col = labels_colors(hcd_gaba),
-               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1)
-}, bg.border = NA, track.height = 0.15)
-max_height = attr(hcd_gaba, "height")
+   circos.barplot(value=t(brain.region.prop)[as.numeric(labels(hcd_gaba)),],pos=1:nrow(brain.region.counts[as.numeric(labels(hcd_gaba)),])-0.5, col=pal_d3("category20")(4))
+}, track.height =.1, bg.border = NA)
 
-circos.heatmap(as.matrix(t(combined.sel.exp)), cluster=FALSE, col = col_fun,  dend.side="none")
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
    circos.dendrogram(hcd_gaba, max_height = max_height)
-}, track.height =.40, bg.border = NA)
+}, track.height =.4, bg.border = NA)
 
+
+lgd_barplot = packLegend(
+       Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_gaba)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 1.5), title = "Brain region", size = unit(4, "mm")),
+       Legend(title = "Marker expression", col_fun = col_fun,title_gp = gpar(cex = 1.5))
+     )
+
+draw(lgd_barplot, x = unit(1.5, "cm"), y = unit(1.5, "cm"), just = c("left", "bottom"))
 
 
 circos.clear()
 
+```
+
+```{r Look at DA features between specific clusters}
+# Read results
+da_features <- qread("../scATAC_data/da_features_12.qs", nthreads = 6)
+
+da_bp_di_gaba <- lapply(da_features[c(46,146,148)],function(da.1){
+  lapply(da.1[c(46,146,148)], function(da.2){
+    if (is_tibble(da.2)){
+      filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
+      
+      if (length(filt.da)>0){
+        filt.da <- sum(width(StringToGRanges(filt.da)))
+      } else {
+        filt.da <- 0
+      }
+    } else {
+      filt.da <- 0
+    }
+  })
+})
+
+dalength.matrix <- sapply(da_bp_di_gaba, unlist)/1000
+rownames(dalength.matrix) <- as.character(c(46,146,148))
+colnames(dalength.matrix) <- as.character(c(46,146,148))
+```
+
+```{r Pairwise chromatin DA count}
+da_count <- lapply(da_features[c(99,95,24,13,14,128)],function(da.1){
+  lapply(da.1[c(99,95,24,13,14,128)], function(da.2){
+    if (is_tibble(da.2)){
+      filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
+      if (length(filt.da)>0){
+        filt.da <- length(filt.da)
+      } else {
+        filt.da <- 0
+      }
+    } else {
+      filt.da <- 0
+    }
+  })
+})
+
+dacount.matrix <- sapply(da_count, unlist)
+rownames(dacount.matrix) <- as.character(c(99,95,24,13,14,128))
+colnames(dacount.matrix) <- as.character(c(99,95,24,13,14,128))
+```
+
+```{r Draw clustered heatmap of pairwise DA results, fig.width=4, fig.height=4}
+col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("white","yellow", "red"))
+
+Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),title="kbp",grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)), cluster_rows=TRUE, cluster_columns = TRUE)
+```
+
+```{r Clusters 46 vs 146,fig.height=10, fig.width=10}
+id.1 <- 46
+id.2 <- 146
+
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2)
+
+circos.clear()
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+circos.genomicIdeogram(species="mm10")
+circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.7, col=dat.1$color, line_col = dat.1$color)
+
+lgd_barplot = packLegend(
+   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
+
+draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+
+circos.clear()
+```
+
+```{r Clusters 46 vs 148,fig.height=10, fig.width=10}
+id.1 <- 46
+id.2 <- 148
+
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2)
+
+circos.clear()
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+circos.genomicIdeogram(species="mm10")
+circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.7, col=dat.1$color, line_col = dat.1$color)
+
+lgd_barplot = packLegend(
+   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
+
+draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+
+circos.clear()
+```
+
+```{r Clusters 146 vs 148,fig.height=10, fig.width=10}
+id.1 <- 146
+id.2 <- 148
+
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2)
+
+circos.clear()
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+circos.genomicIdeogram(species="mm10")
+circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.7, col=dat.1$color, line_col = dat.1$color)
+
+lgd_barplot = packLegend(
+   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
+
+draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+
+circos.clear()
+```
+
+```{r Look for ChromVar in DA regions}
+chvar.da <- lapply(list(pair1=c(46,148),pair2=c(46,146), pair3=c(146,148)),function(pair){
+  ChromVar_DA(da.features=da.features, id.1=pair[1], id.2=pair[2], motifs = PWMs, seurat.object = GABA.e14.data, genome = BSgenome.Mmusculus.UCSC.mm10)
+})
+
+```
+
+
+```{r}
+create_dt(chvar.da[[1]])
+```
+
+```{r}
+create_dt(chvar.da[[2]])
+```
+
+```{r}
+create_dt(chvar.da[[3]])
 ```
 
