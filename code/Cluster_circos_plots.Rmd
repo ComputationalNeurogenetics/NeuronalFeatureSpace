@@ -39,25 +39,25 @@ PWMs <- do.call(PWMatrixList,Hocomocov11)
 
 
 ```{r Extra functions}
-prepare_comp_circos_data <- function(da_features=da_features, id.1, id.2, avg_log2FC.limit=0.75){
+prepare_comp_circos_data <- function(da_features=da_features, id.1, id.2, avg_log2FC.limit=0.75, s.data){
   
-feat.1 <- DA_feats(da.features = da_features, id.1=id.1, id.2=id.2, avg_log2FC.limit = 0.75)
-feat.2 <- DA_feats(da.features = da_features, id.1=id.2, id.2=id.1, avg_log2FC.limit = 0.75)
+feat.1 <- DA_feats(da.features = da_features, id.1=id.1, id.2=id.2, avg_log2FC.limit = avg_log2FC.limit)
+feat.2 <- DA_feats(da.features = da_features, id.1=id.2, id.2=id.1, avg_log2FC.limit = avg_log2FC.limit)
 
 dat.1 <- map(feat.1, function(x) {
     tmp <- unlist(str_split(x, pattern = "-"))
-    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=46) 
+    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=id.1) 
 }) %>% bind_rows() %>% mutate_at(c("start", "end"), .funs=as.numeric)
 
 dat.2 <- map(feat.2, function(x) {
     tmp <- unlist(str_split(x, pattern = "-"))
-    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=146) 
+    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=id.2) 
 }) %>% bind_rows() %>% mutate_at(c("start", "end"), .funs=as.numeric)
 
 dat <- bind_rows(dat.1, dat.2)
 
-closest.gene.1 <- ClosestFeature(object=GABA.e14.data, regions=feat.1)$gene_name
-closest.gene.2 <- ClosestFeature(object=GABA.e14.data, regions=feat.2)$gene_name
+closest.gene.1 <- ClosestFeature(object=s.data, regions=feat.1)$gene_name
+closest.gene.2 <- ClosestFeature(object=s.data, regions=feat.2)$gene_name
 
 dat$label <- c(closest.gene.1,closest.gene.2)
 dat$color <- ifelse(dat$side==id.1, "red","blue")
@@ -111,11 +111,12 @@ return(markers_chromvar)
 ```{r Read E14 merged data}
 #s.data.e14 <- qread("../scATAC_data/s.data.res3.8.qs", nthreads = 6)
 #s.data.e14 <- qread("../scATAC_data/s.data.res13.qs", nthreads = 6)
-s.data.e14 <- readRDS("../scATAC_data/E14_DownstreamReady.200922.RNA.pos.idents.Rds")
+#s.data.e14 <- readRDS("../scATAC_data/E14_DownstreamReady.200922.RNA.pos.idents.Rds")
+s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.300922.RNA.pos.idents.qs", nthreads = 6)
 ```
 
 ```{r UMAP with brain regions, fig.width=10, fig.height=8}
-DimPlot(s.data.e14, group.by = 'brain_region', pt.size = 0.1) + ggtitle("Brain region") + coord_fixed()
+DimPlot(s.data.e14, group.by = 'brain_region', pt.size = 0.1) + coord_fixed() + guides(fill=guide_legend(title='MY NEW TITLE')) + ggtitle("")
 ```
 
 ```{r Plot NT type UMAP, fig.width=10, fig.height=8}
@@ -255,7 +256,7 @@ circos.track(track.index = get.current.track.index(), panel.fun = function(x, y)
         n = length(cn)
         circos.text(rep(CELL_META$cell.xlim[2], n) + convert_x(1, "mm"), 
             1:n - 0.5, cn, 
-            cex = 2, adj = c(0, 0.5), facing = "inside")
+            cex = 1, adj = c(0, 0.5), facing = "inside")
     }
 }, bg.border = NA)
 
@@ -284,10 +285,10 @@ circos.clear()
 
 ```{r Look at DA features between specific clusters}
 # Read results
-da_features <- qread("../scATAC_data/da_features_12.qs", nthreads = 6)
+da_features <- qread("../scATAC_data/da_features_8.qs", nthreads = 6)
 
-da_bp_di_gaba <- lapply(da_features[c(46,146,148)],function(da.1){
-  lapply(da.1[c(46,146,148)], function(da.2){
+da_bp_di_gaba <- lapply(da_features[c(54, 75, 116)],function(da.1){
+  lapply(da.1[c(54, 75, 116)], function(da.2){
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
       
@@ -303,8 +304,8 @@ da_bp_di_gaba <- lapply(da_features[c(46,146,148)],function(da.1){
 })
 
 dalength.matrix <- sapply(da_bp_di_gaba, unlist)/1000
-rownames(dalength.matrix) <- as.character(c(46,146,148))
-colnames(dalength.matrix) <- as.character(c(46,146,148))
+rownames(dalength.matrix) <- as.character(c(54, 75, 116))
+colnames(dalength.matrix) <- as.character(c(54, 75, 116))
 ```
 
 ```{r Pairwise chromatin DA count}
@@ -335,10 +336,10 @@ Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_heigh
 ```
 
 ```{r Clusters 46 vs 146,fig.height=10, fig.width=10}
-id.1 <- 46
-id.2 <- 146
+id.1 <- 54
+id.2 <- 75
 
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2)
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14, avg_log2FC.limit = 0.75)
 
 circos.clear()
 circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
@@ -354,10 +355,10 @@ circos.clear()
 ```
 
 ```{r Clusters 46 vs 148,fig.height=10, fig.width=10}
-id.1 <- 46
-id.2 <- 148
+id.1 <- 54
+id.2 <- 116
 
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2)
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, avg_log2FC.limit = 0.75,  s.data=s.data.e14)
 
 circos.clear()
 circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
@@ -373,10 +374,10 @@ circos.clear()
 ```
 
 ```{r Clusters 146 vs 148,fig.height=10, fig.width=10}
-id.1 <- 146
-id.2 <- 148
+id.1 <- 75
+id.2 <- 116
 
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2)
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14)
 
 circos.clear()
 circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
