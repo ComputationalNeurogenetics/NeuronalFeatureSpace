@@ -198,14 +198,10 @@ dunn2 <- sapply(km.stats.list, function(x){x$dunn2})
 
 clusterint.stats <- tibble(clus.param=as.numeric(str_remove(names(dunn2), pattern = "km.stats.")), dunn2=dunn2, avg.silhouette=avg.silhouette)
 
-ggplot(clusterint.stats, aes(x=clus.param, group=1)) + geom_line(aes(y=dunn2, color="Dunn2")) + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_continuous("Dunn2", sec.axis = sec_axis(~ (. / 2.5), name = "Avg. Silhouette")) + geom_line(aes(y=avg.silhouette*2.5, color="Avg. Silhouette")) + xlab("Clade cutting height") + scale_x_continuous(breaks = seq(4, 10, by = 0.5))  + theme(legend.title=element_blank(), text = element_text(size=16))
-
-
 run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Clade_level_cluster_stats_",run.time,".pdf",sep=""))
+pdf(height = 3, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Clade_level_cluster_parameters_",run.time,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
-pdf(file="../Figures/Cluster_parameters.pdf", height = 3, width = 8)
 ggplot(clusterint.stats, aes(x=clus.param, group=1)) + geom_line(aes(y=dunn2, color="Dunn2")) + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_continuous("Dunn2", sec.axis = sec_axis(~ (. / 2.5), name = "Avg. Silhouette")) + geom_line(aes(y=avg.silhouette*2.5, color="Avg. Silhouette")) + xlab("Clade cutting height") + scale_x_continuous(breaks = seq(4, 10, by = 0.5))  + theme(legend.title=element_blank(), text = element_text(size=16))
 dev.off()
 ```
