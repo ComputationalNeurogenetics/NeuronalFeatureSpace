@@ -211,17 +211,21 @@ patchwork::wrap_plots(f1.list)
 source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
 source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
 
-NT.type.markers <- gene_set_prepare2("../onlyNT_markers280722.xlsx", "Brain")
+NT.type.markers <- gene_set_prepare2("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/onlyNT_markers311022.xlsx", "Brain")
 
 #Renaming genes as gene names instead of ENSMUSG IDs
 s.data_RNA<-RenameGenesSeurat(s.data_RNA,s.data_RNA[["RNA"]]@meta.features[,1])
 DefaultAssay(s.data_RNA) <- 'RNA_name'
 
-#Creating scores for artificial genes: s & g2m
+mouse.cc.genes <- read_xlsx("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/CellCycle/Mouse_S_and_G2m_genes_KA.xlsx", sheet = "Sheet2")
+mouse.g2m.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="G2m") %>% pull(gene_name)
+mouse.s.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="S") %>% pull(gene_name)
+
+#Creating scores for artificial genes: s & g2m 
 s.data_RNA <- CellCycleScoring(
   object = s.data_RNA,
-  g2m.features = str_to_title(cc.genes$g2m.genes),
-  s.features = str_to_title(cc.genes$s.genes),
+  g2m.features = str_to_title(mouse.g2m.genes),
+  s.features = str_to_title(mouse.s.genes),
   search=TRUE
 )
 
@@ -240,15 +244,51 @@ matr <- t(scale(t(matr)))
 # Getting cell-type by cell matrix.
 es.max <- sctype_score(scRNAseqData = matr, scaled = TRUE, gs = NT.type.markers$gs_positive, gs2 = NT.type.markers$gs_negative)
 
-s.data_RNA <- AddMetaData(object=s.data_RNA,metadata = apply(es.max,2,function(x){names(which.max(x))}), col.name = "NT.type")
+cell.nt.types <- apply(es.max,2,function(score){
+  tmp.thr <- mean(score) + (1.3*sd(score))
+  if (max(score) > tmp.thr & max(score)>0){
+    cell.nt.type <- names(which.max(score))
+  } else {
+    cell.nt.type <- "unknown"
+  }
+  return(cell.nt.type)
+})
+
+s.data_RNA <- AddMetaData(object=s.data_RNA,metadata = apply(es.max,2,function(x){names(which.max(x))}), col.name = "NT.type.max")
+s.data_RNA <- AddMetaData(object=s.data_RNA,metadata = cell.nt.types, col.name = "NT.type")
+```
+
+```{r Add brain region information to metadata}
+s.data_RNA <- AddMetaData(object = s.data_RNA, metadata = str_extract(colnames(s.data_RNA), pattern = "[a-z]{2}_\\d{1}|[r1]{2}_\\d{1}"), col.name = "brain_region.replicate")
+s.data_RNA <- AddMetaData(object = s.data_RNA, metadata = str_extract(colnames(s.data_RNA), pattern = "[a-z]{2}|[r1]{2}"), col.name = "brain_region")
 ```
 
 ```{r Draw DimPlot with NT-types, fig.height=10, fig.width=10}
+run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_NT_type_UMAP_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 palette <- distinctColorPalette(length(unique(s.data_RNA$NT.type)))
-DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette, group.by = "NT.type") + coord_fixed()
+DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "NT.type") + coord_fixed() + ggtitle("")
+dev.off()
 ```
 
+```{r Draw DimPlot with cluster numbers, fig.height=10, fig.width=10}
+run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+palette <- distinctColorPalette(length(levels(Idents(s.data_RNA))))
+DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette) + coord_fixed() + ggtitle("") + NoLegend()
+dev.off()
+```
 
+```{r Draw DimPlot with brain region, fig.height=10, fig.width=10}
+run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_brain_region_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+palette <- distinctColorPalette(length(unique(s.data_RNA$brain_region)))
+DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "brain_region") + coord_fixed() + ggtitle("")
+dev.off()
+```
 
 ```{r Find all markers}
 all.markers <- tibble(FindAllMarkers(s.data_RNA, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25))
