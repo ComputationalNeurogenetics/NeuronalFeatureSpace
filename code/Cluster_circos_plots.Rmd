@@ -31,14 +31,23 @@ library(universalmotif)
 ```
 
 ```{r Prepare Hocomoco motifs for ChromVar, message=FALSE}
-Hocomocov11 <- read_jaspar("../../mm10/HOCOMOCOv11_core_MOUSE_mono_jaspar_format.txt")
-names(Hocomocov11) <- lapply(Hocomocov11,function(x){x@name})
-Hocomocov11 <- convert_motifs(Hocomocov11, "TFBSTools-PWMatrix")
-PWMs <- do.call(PWMatrixList,Hocomocov11)
+# Hocomocov11 <- read_jaspar("../../mm10/HOCOMOCOv11_core_MOUSE_mono_jaspar_format.txt")
+# names(Hocomocov11) <- lapply(Hocomocov11,function(x){x@name})
+# Hocomocov11 <- convert_motifs(Hocomocov11, "TFBSTools-PWMatrix")
+# PWMs <- do.call(PWMatrixList,Hocomocov11)
 ```
 
 
 ```{r Extra functions}
+create_dt <- function(x){
+  DT::datatable(x,
+                extensions = 'Buttons',
+                options = list(dom = 'Blfrtip',
+                               buttons = c('copy', 'csv', 'excel', 'pdf'),
+                               lengthMenu = list(c(10,25,50,-1),
+                                                 c(10,25,50,"All"))))
+}
+
 prepare_comp_circos_data <- function(da_features=da_features, id.1, id.2, avg_log2FC.limit=0.75, s.data){
   
 feat.1 <- DA_feats(da.features = da_features, id.1=id.1, id.2=id.2, avg_log2FC.limit = avg_log2FC.limit)
@@ -56,17 +65,21 @@ dat.2 <- map(feat.2, function(x) {
 
 dat <- bind_rows(dat.1, dat.2)
 
-closest.gene.1 <- ClosestFeature(object=s.data, regions=feat.1)$gene_name
-closest.gene.2 <- ClosestFeature(object=s.data, regions=feat.2)$gene_name
+closest.gene.1.genes <- as_tibble(ClosestFeature(object=s.data, regions=feat.1)) %>% pull(gene_name)
+closest.gene.1.dist <- as_tibble(ClosestFeature(object=s.data, regions=feat.1)) %>% pull(distance)
 
-dat$label <- c(closest.gene.1,closest.gene.2)
+closest.gene.2.genes <- as_tibble(ClosestFeature(object=s.data, regions=feat.2)) %>% pull(gene_name)
+closest.gene.2.dist <- as_tibble(ClosestFeature(object=s.data, regions=feat.2)) %>% pull(distance)
+
+dat$label <- c(closest.gene.1.genes,closest.gene.2.genes)
+dat$distance <- c(closest.gene.1.dist,closest.gene.2.dist)
 dat$color <- ifelse(dat$side==id.1, "red","blue")
 return(dat)
 }
 
 
 DA_feats <- function(da.features, id.1, id.2, avg_log2FC.limit=0.75, p_val_adj_limit = 0.05){
-  da_features[[id.1]][[id.2]] %>% dplyr::filter((avg_log2FC > avg_log2FC.limit) & p_val_adj < p_val_adj_limit) %>% pull(feature)
+  da_features[[id.1]][[id.2]] %>% dplyr::filter((avg_log2FC >= avg_log2FC.limit) & p_val_adj <= p_val_adj_limit) %>% pull(feature)
 }
 
 ChromVar_DA <- function(da.features, id.1, id.2, motifs, seurat.object, genome = BSgenome.Mmusculus.UCSC.mm10){
@@ -112,7 +125,7 @@ return(markers_chromvar)
 #s.data.e14 <- qread("../scATAC_data/s.data.res3.8.qs", nthreads = 6)
 #s.data.e14 <- qread("../scATAC_data/s.data.res13.qs", nthreads = 6)
 #s.data.e14 <- readRDS("../scATAC_data/E14_DownstreamReady.200922.RNA.pos.idents.Rds")
-s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.300922.RNA.pos.idents.qs", nthreads = 6)
+s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.311022.RNA.pos.idents.qs", nthreads = 6)
 ```
 
 ```{r UMAP with brain regions, fig.width=10, fig.height=8}
@@ -120,7 +133,7 @@ DimPlot(s.data.e14, group.by = 'brain_region', pt.size = 0.1) + coord_fixed() + 
 ```
 
 ```{r Plot NT type UMAP, fig.width=10, fig.height=8}
-DimPlot(s.data.e14, group.by = 'NT.type', pt.size = 0.1) + ggtitle("Neurotransmitter type") + coord_fixed()
+DimPlot(s.data.e14, group.by = 'NT.type', pt.size = 0.1) + ggtitle("") + coord_fixed()
 ```
 
 ```{r Plot clustering reliability, fig.width=10, fig.height=8}
@@ -153,11 +166,15 @@ e14.cluster.averages <- AverageExpression(s.data.e14, assays="peaks")
 cell.dist.e14 <- proxy::dist(e14.cluster.averages$peaks, method="cosine", by_rows=FALSE)
 hclust_cells_e14 <- hclust(cell.dist.e14, method="ward.D2")
 hcd_e14 <- as.dendrogram(hclust_cells_e14)
-hcd_e14 <- hcd_e14 %>% set("branches_lwd", 8)
+hcd_e14 <- dendextend::set(hcd_e14,what="branches_lwd", value=8)
 ```
 
 
 ```{r Plot all cluster dendrogam with Circos, fig.width=24, fig.height=24}
+run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
+pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+
 circos.clear()
 par(mar = rep(4,4))
 
@@ -174,7 +191,7 @@ circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(nt.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(8))
+   circos.barplot(value=t(nt.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(9)[-8])
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -182,63 +199,71 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(nt.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_jco()(8), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Neurotransmitter type", size = unit(4, "mm")),
-      Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
-     )
+   Legend(at = colnames(t(nt.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(9)[-8], lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Neurotransmitter type", size = unit(4, "mm")),
+      Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
+     , direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
 circos.clear()
+dev.off()
 ```
+
 
 # GABA only
 
 ```{r Subset all GABA cells}
-GABA.e14.data <- subset(s.data.e14, idents=which(nt.type.prop["GABAergic neurons",]>0.75))
-# Draw circos plot of their dendrogram, highlight all DA regions somehow
-```
+reliable.clusters <- as.numeric(tibble(cluster=Idents(s.data.e14), silh=s.data.e14$silh.score) %>% group_by(cluster) %>% summarise(mean.silh=mean(silh)) %>% filter(mean.silh > 0.5) %>% pull(cluster) %>% unique())
 
-```{r GABA selector averages}
-DefaultAssay(s.data.e14) <- "RNA_name"
-GABA.e14.data.avg <- AverageExpression(GABA.e14.data)
-GABA.fate.selectors <- c("Ascl1","Helt","Tal1","Gata2","Gata3","Dlx1","Dlx2")
+GABA.e14.data <- subset(s.data.e14, idents=intersect(which(nt.type.prop["GABAergic neurons",]>0.75),reliable.clusters))
+# Draw circos plot of their dendrogram, highlight all DA regions somehow
 ```
 
 
 ```{r Recalculate GABA only scATAC UMAP}
-GABA.e14.data <- RunTFIDF(GABA.e14.data)
-GABA.e14.data <- FindTopFeatures(GABA.e14.data, min.cutoff = "q0")
-GABA.e14.data <- RunSVD(GABA.e14.data)
+# DefaultAssay(GABA.e14.data) <- "peaks"
+# GABA.e14.data <- RunTFIDF(GABA.e14.data)
+# GABA.e14.data <- FindTopFeatures(GABA.e14.data, min.cutoff = "q0")
+# GABA.e14.data <- RunSVD(GABA.e14.data)
+# 
+# std.proportion <- sapply(2:length(GABA.e14.data@reductions$lsi@stdev),function(x){GABA.e14.data@reductions$lsi@stdev[x]/GABA.e14.data@reductions$lsi@stdev[2]})
+# 
+# std.aim <- 0.15
+# 
+# # Finding number of components of which std proportion to 2nd component is closest to std.aim
+# max.lsi.dim.re <- which.min(abs(std.proportion-std.aim))
+# 
+# GABA.e14.data <- RunUMAP(GABA.e14.data, dims = 2:max.lsi.dim.re, reduction = 'lsi')
+# DimPlot(GABA.e14.data, group.by = 'ident', pt.size = 0.5)
+```
 
-std.proportion <- sapply(2:length(GABA.e14.data@reductions$lsi@stdev),function(x){GABA.e14.data@reductions$lsi@stdev[x]/GABA.e14.data@reductions$lsi@stdev[2]})
-
-std.aim <- 0.15
-
-# Finding number of components of which std proportion to 2nd component is closest to std.aim
-max.lsi.dim.re <- which.min(abs(std.proportion-std.aim))
-
-GABA.e14.data <- RunUMAP(GABA.e14.data, dims = 2:max.lsi.dim.re, reduction = 'lsi')
-DimPlot(GABA.e14.data, group.by = 'ident', pt.size = 0.5)
-# TODO: Switch this to Cell type labels
+```{r GABA selector averages}
+DefaultAssay(GABA.e14.data) <- "RNA_name"
+GABA.e14.data.avg <- AverageExpression(GABA.e14.data)
+GABA.fate.selectors <- c("Ascl1","Dlx1","Dlx2","Gata2","Gata3","Tal2","Tal1","Gad1","Gad2")
 ```
 
 ```{r}
 cell.dist.gaba <- proxy::dist(GABA.e14.data.avg$peaks, method="cosine", by_rows=FALSE)
 hclust_cells.gaba <- hclust(cell.dist.gaba, method="ward.D2")
 hcd_gaba <- as.dendrogram(hclust_cells.gaba)
+hcd_gaba <- dendextend::set(hcd_gaba, "branches_lwd",8)
 ```
 
 ```{r}
 cluster.order <- labels(hcd_gaba)
-e14.selector.exp <- as.matrix(t(scale(GABA.e14.data.avg$RNA_name[GABA.fate.selectors,cluster.order])))
-col_fun = colorRamp2(c(min(e14.selector.exp), 0, max(e14.selector.exp)), c("blue", "white", "red"))
+e14.selector.exp <- as.matrix(((t(GABA.e14.data.avg$RNA_name[GABA.fate.selectors,cluster.order]))))
+col_fun = colorRamp2(c(min(e14.selector.exp), mean(e14.selector.exp), max(e14.selector.exp)), c("blue", "white", "red"))
 ```
 
 
 ```{r Draw GABA only circos dendrogram, fig.height=14, fig.width=14}
+run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
+pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_GABA_clusters_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+
 circos.clear()
 par(mar = rep(3,4))
-#circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_gaba))))
 
 circos.par(gap.after = c(10))
 
@@ -278,17 +303,16 @@ lgd_barplot = packLegend(
 
 draw(lgd_barplot, x = unit(1.5, "cm"), y = unit(1.5, "cm"), just = c("left", "bottom"))
 
-
 circos.clear()
-
+dev.off()
 ```
 
 ```{r Look at DA features between specific clusters}
 # Read results
 da_features <- qread("../scATAC_data/da_features_8.qs", nthreads = 6)
 
-da_bp_di_gaba <- lapply(da_features[c(54, 75, 116)],function(da.1){
-  lapply(da.1[c(54, 75, 116)], function(da.2){
+da_bp_di_gaba <- lapply(da_features[c(122,18,19,60)],function(da.1){
+  lapply(da.1[c(122,18,19,60)], function(da.2){
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
       
@@ -304,13 +328,13 @@ da_bp_di_gaba <- lapply(da_features[c(54, 75, 116)],function(da.1){
 })
 
 dalength.matrix <- sapply(da_bp_di_gaba, unlist)/1000
-rownames(dalength.matrix) <- as.character(c(54, 75, 116))
-colnames(dalength.matrix) <- as.character(c(54, 75, 116))
+rownames(dalength.matrix) <- as.character(c(122,18,19,60))
+colnames(dalength.matrix) <- as.character(c(122,18,19,60))
 ```
 
 ```{r Pairwise chromatin DA count}
-da_count <- lapply(da_features[c(99,95,24,13,14,128)],function(da.1){
-  lapply(da.1[c(99,95,24,13,14,128)], function(da.2){
+da_count <- lapply(da_features[c(122,18,19,60)],function(da.1){
+  lapply(da.1[c(122,18,19,60)], function(da.2){
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
       if (length(filt.da)>0){
@@ -325,8 +349,8 @@ da_count <- lapply(da_features[c(99,95,24,13,14,128)],function(da.1){
 })
 
 dacount.matrix <- sapply(da_count, unlist)
-rownames(dacount.matrix) <- as.character(c(99,95,24,13,14,128))
-colnames(dacount.matrix) <- as.character(c(99,95,24,13,14,128))
+rownames(dacount.matrix) <- as.character(c(122,18,19,60))
+colnames(dacount.matrix) <- as.character(c(122,18,19,60))
 ```
 
 ```{r Draw clustered heatmap of pairwise DA results, fig.width=4, fig.height=4}
@@ -335,12 +359,69 @@ col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("whit
 Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),title="kbp",grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)), cluster_rows=TRUE, cluster_columns = TRUE)
 ```
 
-```{r Clusters 46 vs 146,fig.height=10, fig.width=10}
-id.1 <- 54
-id.2 <- 75
+```{r Clusters 18 vs 122,fig.height=15, fig.width=15}
+id.1 <- 60
+id.2 <- 122
+
+DefaultAssay(s.data.e14) <- "peaks"
 
 dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14, avg_log2FC.limit = 0.75)
 
+dat.1 <- dplyr::filter(dat.1, distance <= 50000)
+
+circos.clear()
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+circos.genomicIdeogram(species="mm10")
+circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.6, col=dat.1$color, line_col = dat.1$color)
+
+lgd_barplot = packLegend(
+   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
+
+draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+
+circos.clear()
+```
+
+```{r Table of closest genes 18 vs 122}
+create_dt(dat.1)
+```
+```{r Clusters 18 vs 19,fig.height=15, fig.width=15}
+id.1 <- 19
+id.2 <- 122
+
+DefaultAssay(s.data.e14) <- "peaks"
+
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14, avg_log2FC.limit = 0.75)
+
+dat.1 <- dplyr::filter(dat.1, distance <= 50000)
+
+circos.clear()
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+circos.genomicIdeogram(species="mm10")
+circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.6, col=dat.1$color, line_col = dat.1$color)
+
+lgd_barplot = packLegend(
+   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
+
+draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+
+circos.clear()
+```
+
+```{r Table of closest genes 18 vs 19}
+create_dt(dat.1)
+```
+
+```{r Clusters 18 vs 60,fig.height=15, fig.width=15}
+id.1 <- 19
+id.2 <- 60
+
+DefaultAssay(s.data.e14) <- "peaks"
+
+dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14, avg_log2FC.limit = 0.75)
+
+dat.1 <- dplyr::filter(dat.1, distance <= 50000)
+
 circos.clear()
 circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
 circos.genomicIdeogram(species="mm10")
@@ -354,43 +435,127 @@ draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom
 circos.clear()
 ```
 
-```{r Clusters 46 vs 148,fig.height=10, fig.width=10}
-id.1 <- 54
-id.2 <- 116
-
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, avg_log2FC.limit = 0.75,  s.data=s.data.e14)
-
-circos.clear()
-circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
-circos.genomicIdeogram(species="mm10")
-circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.7, col=dat.1$color, line_col = dat.1$color)
-
-lgd_barplot = packLegend(
-   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
-
-draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
-
-circos.clear()
+```{r Table of closest genes 18 vs 60}
+create_dt(dat.1)
 ```
 
-```{r Clusters 146 vs 148,fig.height=10, fig.width=10}
-id.1 <- 75
-id.2 <- 116
-
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14)
-
-circos.clear()
-circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
-circos.genomicIdeogram(species="mm10")
-circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.7, col=dat.1$color, line_col = dat.1$color)
-
-lgd_barplot = packLegend(
-   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
-
-draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
-
-circos.clear()
+```{r Expression space of Dlx clusters}
+Dlx.GABA.e14.data <- subset(s.data.e14, idents=c(122,18,19,60))
+DefaultAssay(Dlx.GABA.e14.data) <- "RNA"
+Dlx.GABA.e14.data <- FindVariableFeatures(object = Dlx.GABA.e14.data, assay = "RNA", nfeatures = 3000)
+Dlx.exp.mat <- as.matrix(FetchData(Dlx.GABA.e14.data, vars = VariableFeatures(Dlx.GABA.e14.data)))
 ```
+
+```{r Dlx clusters heatmap, fig.height=10, fig.width=20}
+genes.to.highlight <- unique(c("Zbtb7c","Ubash3b","Npy", "Isl1", "Scg2", "Sox6", "Six3", "Sst", "Ecel1", "Lhx6", "Dlx2", "Foxg1", "Nkx2-1", "Lhx1", "Pax6", "Prox1", "Nkx2-1", "Foxg1", "Isl1", "Reln", "Prox1", "Six6", "Lhx8", "Arl4d"))
+genes.to.highlight.ens <- rownames(Dlx.GABA.e14.data[["RNA"]][[]])[match(genes.to.highlight,Dlx.GABA.e14.data[["RNA"]][[]]$feature_symbol)]
+genes.to.i <- match(genes.to.highlight.ens,colnames(Dlx.exp.mat))
+
+col_ha <- HeatmapAnnotation(mark = anno_mark(at = genes.to.i, labels = genes.to.highlight, side="bottom"), which = "column")
+
+row_ha <- rowAnnotation(scATAC.cluster = Idents(Dlx.GABA.e14.data), col = list(scATAC.cluster = c("18" = "red", "19" = "green", "60" = "steelblue", "122" = "orange")))
+
+# "65" = "grey", "95" = "yellow"
+
+col_fun = colorRamp2(c(0, mean(Dlx.exp.mat),max(Dlx.exp.mat)), c("blue","white", "red"))
+
+Heatmap(Dlx.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=5, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression"), bottom_annotation = col_ha,left_annotation = rowAnnotation(cluster.names = anno_block(gp = gpar(fill =  c("steelblue", "orange","green","red")[c(1,2,3,4)]),labels = c("P3", "MGE", "Ret.Th./LGN", "GABA+NP")[c(1,2,3,4)], labels_gp = gpar(col = "black", fontsize = 10))))
+```
+```{r DE genes between 4 Dlx clusters}
+dlx.cluster.markers <- FindAllMarkers(Dlx.GABA.e14.data, assay = "RNA_name")
+dlx.cluster.markers.tb <- as_tibble(dlx.cluster.markers) %>% filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05)
+create_dt(dlx.cluster.markers.tb)
+```
+
+```{r Expression space of R1 clusters}
+R1.GABA.e14.data <- subset(s.data.e14, idents=c(74,91,115,53,58,57,68))
+DefaultAssay(R1.GABA.e14.data) <- "RNA"
+R1.GABA.e14.data <- FindVariableFeatures(object = R1.GABA.e14.data, assay = "RNA", nfeatures = 3000)
+R1.exp.mat <- as.matrix(FetchData(R1.GABA.e14.data, vars = VariableFeatures(R1.GABA.e14.data)))
+```
+
+```{r R1 clusters heatmap, fig.height=10, fig.width=20}
+genes.to.highlight <- unique(c("Zbtb7c","Ubash3b","Npy", "Isl1", "Scg2", "Sox6", "Six3", "Sst", "Ecel1", "Lhx6", "Dlx2", "Foxg1", "Nkx2-1", "Lhx1", "Pax6", "Prox1", "Nkx2-1", "Foxg1", "Isl1", "Reln", "Prox1", "Six6", "Lhx8", "Arl4d"))
+genes.to.highlight.ens <- rownames(R1.GABA.e14.data[["RNA"]][[]])[match(genes.to.highlight,R1.GABA.e14.data[["RNA"]][[]]$feature_symbol)]
+genes.to.i <- match(genes.to.highlight.ens,colnames(R1.exp.mat))
+
+col_ha <- HeatmapAnnotation(mark = anno_mark(at = genes.to.i, labels = genes.to.highlight, side="bottom"), which = "column")
+
+row_ha <- rowAnnotation(scATAC.cluster = Idents(R1.GABA.e14.data), col = list(scATAC.cluster = c("74" = "red", "115" = "green", "91" = "steelblue", "53" = "orange","58" = "grey", "57"="purple", "68" = "yellow")))
+
+col_fun = colorRamp2(c(0, mean(R1.exp.mat),max(R1.exp.mat)), c("blue","white", "red"))
+
+Heatmap(R1.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=7, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression"), bottom_annotation = col_ha)
+
+#left_annotation = rowAnnotation(cluster.names = anno_block(gp = gpar(fill =  c("steelblue", "orange","green","red","grey","purple","yellow")[c(2,5,7,1,6,4,3)]),labels = c("l R1 GABA neur.", "d R1 GABA precur.", "early/migr.", "d R1 GABA (DTg)", "dl R1 GABA precur.", "d R1 GABA neur. (Foxp2)", "l R1 GABA precur.")[c(2,5,7,1,6,4,3)], labels_gp = gpar(col = "black", fontsize = 6)))
+
+```
+
+```{r DE genes between 7 R1 clusters}
+r1.cluster.markers <- FindAllMarkers(R1.GABA.e14.data, assay = "RNA_name")
+r1.cluster.markers.tb <- as_tibble(r1.cluster.markers) %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05)
+create_dt(r1.cluster.markers.tb)
+```
+
+```{r Subset DI data}
+GABA.prog.e14.data <- subset(s.data.e14, idents=seq(1:130)[which(nt.type.prop["GABAergic neurons",]>0.75 | nt.type.prop["progenitor",]>0.5)])
+```
+
+
+```{r Recalculate LSI and UMAP for DI subset}
+DefaultAssay(GABA.prog.e14.data) <- "peaks"
+GABA.prog.e14.data <- RunTFIDF(GABA.prog.e14.data)
+#GABA.prog.e14.data <- FindTopFeatures(GABA.prog.e14.data, min.cutoff = "q75")
+GABA.prog.e14.data <- RunSVD(GABA.prog.e14.data, n = 60)
+
+GABA.prog.e14.data <-  RunUMAP(GABA.prog.e14.data,dims = 2:60, reduction = 'lsi')
+DimPlot(GABA.prog.e14.data, label = TRUE, pt.size=1.2, label.size = 6) + NoLegend() + coord_fixed()
+DimPlot(GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, group.by = "NT.type") + coord_fixed()
+DimPlot(GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, group.by = "brain_region") + coord_fixed()
+```
+
+```{r Find root cell indices}
+top.n.barcodes <- rownames_to_column(FetchData(GABA.prog.e14.data, vars="Ascl1"),var = "barcode") %>% top_frac(n=.025) %>% pull(barcode)
+
+top.n.barcode.indices <- which(colnames(GABA.prog.e14.data) %in% top.n.barcodes)-1
+
+write_csv(data.frame(top.n.barcode.indices),file="../analysis/root_indices.csv")
+```
+
+
+```{r Write out UMAP coordinates for VIA}
+
+#peak.data <- FetchData(GABA.prog.e14.data, vars = VariableFeatures(GABA.prog.e14.data))
+
+VIA.out <- cbind(tibble(barcode=colnames(GABA.prog.e14.data),label = Idents(GABA.prog.e14.data), UMAP_1 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,1], UMAP_2 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,2]),as_tibble(GABsA.prog.e14.data@reductions$lsi@cell.embeddings))
+
+progenitor.patterning <- c("Sox2","Nkx2-1","Nkx2-2", "Nkx6-1", "Otx2")
+GABAergic <- c("Sox21","Ascl1","Gad1","Gad2", "Slc32a1")
+GABA.precursor.fate <- c("Helt","Gata2","Gata3","Tal1","Lhx6","Dlx1","Dlx2","Arx")
+glutamatergic <- c("Neurog2","Pou4f1","Gls","Slc17a6")
+cholinergic <- c("Phox2b","Isl1","Chat","Slc18a3")
+dopaminergic <- c("Foxa1","Ddc","Th","Slc18a2")
+serotonergic <- c("Pitx3", "Lmx1a","Fev","Tph2","Slc6a4")
+adrenergic <- c("En1", "Phox2a","Dbh")
+
+marker_genes <- c(progenitor.patterning,GABAergic, GABA.precursor.fate, glutamatergic, cholinergic, dopaminergic, serotonergic, adrenergic)
+
+DefaultAssay(GABA.prog.e14.data) <- "RNA_name"
+GABA.prog.e14.data.markers <- FetchData(GABA.prog.e14.data, vars = marker_genes)
+
+VIA.out <- cbind(VIA.out, GABA.prog.e14.data.markers)
+#VIA.out <- cbind(tibble(barcode=colnames(GABA.prog.e14.data),label = Idents(GABA.prog.e14.data), UMAP_1 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,1], UMAP_2 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,2]),as_tibble(peak.data))
+
+write.table(VIA.out, file="../analysis/VIA.out.GABA.csv", sep = ",")
+```
+
+<!-- # ```{r} -->
+<!-- # VIA.out <- cbind(tibble(barcode=colnames(s.data.e14),label = Idents(s.data.e14), UMAP_1 = s.data.e14@reductions$umap@cell.embeddings[,1], UMAP_2 = s.data.e14@reductions$umap@cell.embeddings[,2]),as_tibble(s.data.e14@reductions$lsi@cell.embeddings)) -->
+<!-- #  -->
+<!-- # write.table(VIA.out, file="../analysis/VIA.out.all.csv", sep = ",") -->
+<!-- # ``` -->
+
+
 
 ```{r Look for ChromVar in DA regions}
 chvar.da <- lapply(list(pair1=c(46,148),pair2=c(46,146), pair3=c(146,148)),function(pair){
