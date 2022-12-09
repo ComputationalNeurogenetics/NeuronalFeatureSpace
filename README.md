@@ -1,4 +1,4 @@
-# NeuronalFeatureSpace
+# Neuron types in the developing mouse CNS can be divided into several epigenomic and transcriptomic classes
 
 This is repository for code used in the manuscript "Neuron types in the developing mouse CNS can be divided into several epigenomic and transcriptomic classes".
 
