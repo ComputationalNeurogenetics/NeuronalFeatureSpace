@@ -282,10 +282,10 @@ saveRDS(clade.peaks,paste("../analysis/joint.clade.peaks.",run.date,".Rds",sep="
 # Looking for correspondence between joint feature space and separate ones
 
 ```{r Loading separately generated feature spaces}
-clade.peaks.di <- readRDS("/Volumes/VarastoPool-1/University_research_data/e14di1/scATAC_data/clade.peaks.Rds")
-clade.peaks.e12r1 <- readRDS("../../E12R1/scATAC_data/clade.peaks.191021.Rds")
-clade.peaks.e14vmb1 <- readRDS("../../e14vmb1/scATAC_data/clade.peaks.Rds")
-clade.peaks.e14vr1 <- readRDS("../../e14vR1/code/E14_R1.021121.cladepeaks.Rds")
+clade.peaks.di <- readRDS("../analysis/E14DI_clade.peaks.Rds")
+clade.peaks.e12r1 <- readRDS("../analysis/E12R1_clade.peaks.191021.Rds")
+clade.peaks.e14vmb1 <- readRDS("../analysis/E14MB_clade.peaks.Rds")
+clade.peaks.e14vr1 <- readRDS("../analysis/E14_R1.021121.cladepeaks.Rds")
 ```
 
 ```{r}
@@ -295,16 +295,22 @@ clade.peaks
 There are 482 157 features in jointly defined feature space
 
 ```{r Stats of features, fig.width=12}
-ggplot(tibble(feat.widths=(ranges(clade.peaks)@width)),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") 0+ theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(0, 6000, by = 500))
-  
-  
+run.time <- format(Sys.time(), "%d-%m-%y")
+pdf(height = 8, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_length_histogram",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+ggplot(tibble(feat.widths=(ranges(clade.peaks)@width)),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") + theme(text = element_text(size=26)) + scale_x_continuous(breaks = seq(0, 6000, by = 500))
 stat_bin(binwidth=250, geom='text', color='white', aes(label=..count..), position=position_stack(vjust = 0.5))
+dev.off()
 ```
 
 ```{r Peak locations circos, fig.height=8, fig.width=8}
-circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
+run.time <- format(Sys.time(), "%d-%m-%y")
+pdf(height = 12, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_density_circos_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10",ideogram.height = convert_height(5, "mm"),axis.labels.cex = 0.8*par("cex"), labels.cex = 1.2*par("cex"))
 circos.genomicIdeogram(species="mm10")
 circos.genomicDensity(Repitools::annoGR2DF(clade.peaks), col="#EFC000FF")
+dev.off()
 ```
 
 ```{r Feature distances to nearest TSS}
