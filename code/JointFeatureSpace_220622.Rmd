@@ -20,6 +20,7 @@ library(BiocManager)
 library(ChIPseeker)
 library(circlize)
 library(ComplexHeatmap)
+library(genomation)
 library(fpc)
 library(ggsci)
 library(qs)
@@ -298,7 +299,7 @@ There are 482 157 features in jointly defined feature space
 ggplot(tibble(feat.widths=(ranges(clade.peaks)@width)),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") 0+ theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(0, 6000, by = 500))
   
   
-  stat_bin(binwidth=250, geom='text', color='white', aes(label=..count..), position=position_stack(vjust = 0.5))
+stat_bin(binwidth=250, geom='text', color='white', aes(label=..count..), position=position_stack(vjust = 0.5))
 ```
 
 ```{r Peak locations circos, fig.height=8, fig.width=8}
@@ -326,9 +327,8 @@ average.feature.loc.gene <- plotPeakProf2(peak = clade.peaks, upstream = rel(0.2
 average.feature.loc.gene + theme(text=element_text(size=26))
 ```
 
-```{r}
-peakAnno.edb <- annotatePeak(clade.peaks, tssRegion=c(-3000, 3000),
-                             TxDb=edb, annoDb="org.Mm.eg.db")
+```{r Plot pie charts of feature annotation categories}
+peakAnno.edb <- annotatePeak(clade.peaks, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
 
 plotAnnoPie(peakAnno.edb)
 vennpie(peakAnno.edb)
@@ -338,24 +338,12 @@ vennpie(peakAnno.edb)
 plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
 ```
 
-```{r}
-clade.peaks.di
-```
-
-```{r Comparison to all ENCODE mouse cCREs}
-# ENCODE.cCREs <- readGeneric("../../mm10/41586_2020_2493_MOESM13_ESM.txt", meta.cols = list(rDHS_accession = 4, cCRE_accession = 5, group = 6), remove.unusual = TRUE, header=TRUE)
-# DefaultAssay(s.data.e14) <- "peaks"
-# features.gr <- StringToGRanges(rownames(s.data.e14))
-```
-
 ```{r Comparison to E14.5 brain cCREs from ENCODE}
 ENCODE.Fore_cCREs <- readGeneric("../../mm10/Fore_ENCFF237YNH_ENCFF349REI_ENCFF279EVI.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.Fore_cCREs <- ENCODE.Fore_cCREs[which(!elementMetadata(ENCODE.Fore_cCREs)[,ncol(elementMetadata(ENCODE.Fore_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
-
 ENCODE.MB_cCREs <- readGeneric("../../mm10/MB_ENCFF539CBL_ENCFF829ZIT_ENCFF104QAC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.MB_cCREs <- ENCODE.MB_cCREs[which(!elementMetadata(ENCODE.MB_cCREs)[,ncol(elementMetadata(ENCODE.MB_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
-
 
 ENCODE.Hind_cCREs <- readGeneric("../../mm10/Hind_ENCFF274NPS_ENCFF475FUT_ENCFF081VBW.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.Hind_cCREs <- ENCODE.Hind_cCREs[which(!elementMetadata(ENCODE.Hind_cCREs)[,ncol(elementMetadata(ENCODE.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
@@ -364,8 +352,11 @@ ENCODE.E12.Hind_cCREs <- readGeneric("../../mm10/E12_hind_ENCFF344PSC_ENCFF333XR
 ENCODE.E12.Hind_cCREs <- ENCODE.E12.Hind_cCREs[which(!elementMetadata(ENCODE.E12.Hind_cCREs)[,ncol(elementMetadata(ENCODE.E12.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
 Combined.brain.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs,ENCODE.E12.Hind_cCREs))
-```
+saveRDS(Combined.brain.cCREs, file="../../mm10/Combined.brain.cCREs.Rds")
 
+Combined.brain.E14.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs))
+saveRDS(Combined.brain.E14.cCREs, file="../../mm10/Combined.brain.E14.cCREs.Rds")
+```
 
 ```{r}
 ggplot(tibble(feat.widths=ranges(unique(Combined.brain.cCREs))@width),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("cCREs length in bp") + ylab("Count") + theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(100, 350, by = 50)) + ggtitle("ENCODE mouse brain cCREs")
@@ -378,7 +369,7 @@ ggplot(tibble(feat.widths=ranges(clade.peaks)@width),aes(x=feat.widths)) + geom_
 
 ```{r, fig.height=24, fig.width=24}
 pdf(file="VENN_BRAIN_ENCODE_vs_all.pdf", width = 15, height = 15)
-makeVennDiagram(Peaks=list(clade.peaks,unique(Combined.E14.brain.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
+makeVennDiagram(Peaks=list(clade.peaks,unique(Combined.brain.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
 dev.off()
 ```
 

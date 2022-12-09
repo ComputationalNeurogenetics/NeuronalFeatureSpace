@@ -55,7 +55,7 @@ if(all(status)){
     status
 }
 
-#source("../../generic code/AuxFunctions.R")
+source("AdditionalFunctions.R")
 set.seed(2020);
 ```
 
