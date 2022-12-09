@@ -24,7 +24,7 @@ library(genomation)
 library(fpc)
 library(ggsci)
 library(qs)
-source("../../generic code/AuxFunctions.R")
+source("AdditionalFunctions.R")
 ```
 
 ```{r Setting multicore/multisession}
@@ -64,10 +64,9 @@ neuronal.merged
 str(Fragments(neuronal.merged))
 ```
 
-
 ```{r Add gene annotations from Ensembl, include=FALSE}
 # extract gene annotations from EnsDb
-annotations <- readRDS("../../Github/AnalysisEnvironment/mm10/Ensembel_Mmusculus79_annotation.Rds")
+annotations <- readRDS("../metadata/Ensembel_Mmusculus79_annotation.Rds")
 
 # change to UCSC style since the data was mapped to hg19
 seqlevelsStyle(annotations) <- 'UCSC'
@@ -175,7 +174,7 @@ hcd <- as.dendrogram(hclust_cells)
 ```
 
 ```{r Calculate cluster statistics}
-# Calculation atHPC cluster and returning here
+# Calculation km.stats with cluster.stats (fpc package) at various cut levels at HPC cluster and returning here
 km.stats.10 <- qread("../analysis/km.stats.res.10.200622.qs")
 km.stats.9.5 <- qread("../analysis/km.stats.res.9.5.200622.qs")
 km.stats.9 <- qread("../analysis/km.stats.res.9.200622.qs")
