@@ -38,3 +38,5 @@ Further downstream analyses are coded in ClusterCircosPlots.Rmd
 6. Draw circlize plots of closest genes to DA features
 7. GO enrichement tests for closest genes
 8. Heatmap of top 3000 variable transcriptome of DI GABAergic clusters
+9. Subsetting and exporting data for VIA analysis
+10. Draw ENCODE comparison VENN-diagrams
