@@ -129,8 +129,6 @@ draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom
 circos.clear()
 dev.off()
 ```
-
-
 # GABA only
 
 ```{r Subset all GABA cells}
@@ -145,14 +143,14 @@ GABA.e14.data.avg <- AverageExpression(GABA.e14.data)
 GABA.fate.selectors <- c("Ascl1","Dlx1","Dlx2","Gata2","Gata3","Tal2","Tal1","Gad1","Gad2")
 ```
 
-```{r}
+```{r Hierarchical clustering of GABAergic clusters}
 cell.dist.gaba <- proxy::dist(GABA.e14.data.avg$peaks, method="cosine", by_rows=FALSE)
 hclust_cells.gaba <- hclust(cell.dist.gaba, method="ward.D2")
 hcd_gaba <- as.dendrogram(hclust_cells.gaba)
 hcd_gaba <- dendextend::set(hcd_gaba, "branches_lwd",6)
 ```
 
-```{r}
+```{r Setting labels and colors for GABA circos}
 cluster.order <- labels(hcd_gaba)
 e14.selector.exp <- as.matrix(((t(GABA.e14.data.avg$RNA_name[GABA.fate.selectors,cluster.order]))))
 col_fun = colorRamp2(c(min(e14.selector.exp), mean(e14.selector.exp), max(e14.selector.exp)), c("blue", "white", "red"))
@@ -169,12 +167,6 @@ par(mar = rep(3,4))
 circos.par(gap.after = c(10))
 
 circos.heatmap(e14.selector.exp, cluster=FALSE, col = col_fun,  dend.side="none",cell.border = "black", rownames.side = "outside", rownames.cex=3,  track.height = 0.3)
-
-#circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-#circos.text(1:length(labels(hcd_gaba))-0.5, rep(0, length(labels(hcd_gaba))), labels(hcd_gaba), col = labels_colors(hcd_gaba), facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1)
-#}, bg.border = NA, track.height = 0.15)
-
-#max_height = attr(hcd_gaba, "height")
 
 circos.track(track.index = get.current.track.index(), panel.fun = function(x, y) {
     if(CELL_META$sector.numeric.index == 1) { # the last sector
@@ -255,7 +247,6 @@ colnames(dacount.matrix) <- as.character(c(122,18,19,60,21))
 ```
 
 ```{r Draw clustered heatmap of pairwise DA results, fig.width=4, fig.height=4}
-
 run.time <- format(Sys.time(), "%d-%m-%y")
 pdf(height = 6, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/DA_features_heatmap_DI_clusters_",run.time,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
@@ -292,7 +283,7 @@ open.50.per.cluster
 
 ```
 
-```{r Clusters 18 vs 122,fig.height=15, fig.width=15}
+```{r Draw closest gene circoses for cluster pairs,fig.height=15, fig.width=15}
 id.1 <- 19
 id.2 <- 122
 
@@ -338,63 +329,6 @@ Go_Enrich_Out<- go_enrich(clust.18,organismDb='Mus.musculus')
 refined.18 = as_tibble(refine(Go_Enrich_Out, fwer=0.25)) %>% dplyr::filter(signif==TRUE)
 
 create_dt(refined.18)
-```
-
-```{r Table of closest genes 18 vs 122}
-create_dt(dat.1)
-```
-```{r Clusters 18 vs 19,fig.height=15, fig.width=15}
-id.1 <- 19
-id.2 <- 122
-
-DefaultAssay(s.data.e14) <- "peaks"
-
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14, avg_log2FC.limit = 0.75)
-
-dat.1 <- dplyr::filter(dat.1, distance <= 50000)
-
-circos.clear()
-circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
-circos.genomicIdeogram(species="mm10")
-circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.6, col=dat.1$color, line_col = dat.1$color)
-
-lgd_barplot = packLegend(
-   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
-
-draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
-
-circos.clear()
-```
-
-```{r Table of closest genes 18 vs 19}
-create_dt(dat.1)
-```
-
-```{r Clusters 18 vs 60,fig.height=15, fig.width=15}
-id.1 <- 19
-id.2 <- 60
-
-DefaultAssay(s.data.e14) <- "peaks"
-
-dat.1 <- prepare_comp_circos_data(da_features = da_features, id.1=id.1,id.2=id.2, s.data=s.data.e14, avg_log2FC.limit = 0.75)
-
-dat.1 <- dplyr::filter(dat.1, distance <= 50000)
-
-circos.clear()
-circos.initializeWithIdeogram(plotType = c("labels", "axis"),species="mm10")
-circos.genomicIdeogram(species="mm10")
-circos.genomicLabels(bed=as.data.frame(dat.1), labels.column = 5, side="inside", cex=0.7, col=dat.1$color, line_col = dat.1$color)
-
-lgd_barplot = packLegend(
-   Legend(at = c(id.1,id.2), type = "lines",labels_gp = gpar(col = "black", cex = 1), legend_gp = gpar(col=c("red","blue"), lwd = 4), title_position = "topleft", title_gp = gpar(cex = 1), title = "Cluster", size = unit(2, "mm")))
-
-draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
-
-circos.clear()
-```
-
-```{r Table of closest genes 18 vs 60}
-create_dt(dat.1)
 ```
 
 # Transcriptome of DI cells
@@ -468,20 +402,8 @@ create_dt(r1.cluster.markers.tb)
 # VIA part
 
 ```{r Subset GABA data for VIA}
-#GABA.prog.e14.data <- subset(s.data.e14, idents=intersect(seq(1:130)[which(nt.type.prop["GABAergic neurons",]>0.75 | nt.type.prop["progenitor",]>0.5)], reliable.clusters))
-
-GABA.prog.e14.data <- subset(s.data.e14, idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(104,21,23,69,95,90,54,118))), reliable.clusters))
-
-# opt1
-GABA.prog.e14.data <- subset(s.data.e14, idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(90,21,95,69,118,54))), reliable.clusters))
-
-# opt2
 GABA.prog.e14.data <- subset(s.data.e14, idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(90,21,104))), reliable.clusters))
-
-# Test with serot
-GABA.prog.e14.data <- subset(s.data.e14, idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(90,21,12,64))), reliable.clusters))
 ```
-
 
 ```{r Recalculate LSI and UMAP for DI subset}
 DefaultAssay(GABA.prog.e14.data) <- "peaks"
@@ -496,19 +418,7 @@ p3 <- DimPlot(GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, gr
 cowplot::plot_grid(p1,p2,p3)
 ```
 
-```{r Find root cell indices}
-top.n.barcodes <- rownames_to_column(FetchData(GABA.prog.e14.data, vars="Ascl1"),var = "barcode") %>% top_frac(n=.025) %>% pull(barcode)
-
-top.n.barcode.indices <- which(colnames(GABA.prog.e14.data) %in% top.n.barcodes)-1
-
-write_csv(data.frame(top.n.barcode.indices),file="../analysis/root_indices.csv")
-```
-
-
 ```{r Write out UMAP coordinates for VIA}
-
-#peak.data <- FetchData(GABA.prog.e14.data, vars = VariableFeatures(GABA.prog.e14.data))
-
 VIA.out <- cbind(tibble(barcode=colnames(GABA.prog.e14.data),label = as.character(Idents(GABA.prog.e14.data)), UMAP_1 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,1], UMAP_2 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,2]),as_tibble(GABA.prog.e14.data@reductions$lsi@cell.embeddings))
 
 progenitor.patterning <- c("Sox2","Nkx2-1","Nkx2-2", "Nkx6-1", "Otx2")
@@ -526,37 +436,8 @@ DefaultAssay(GABA.prog.e14.data) <- "RNA_name"
 GABA.prog.e14.data.markers <- FetchData(GABA.prog.e14.data, vars = marker_genes)
 
 VIA.out <- tibble(cbind(VIA.out, GABA.prog.e14.data.markers))
-#VIA.out <- cbind(tibble(barcode=colnames(GABA.prog.e14.data),label = Idents(GABA.prog.e14.data), UMAP_1 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,1], UMAP_2 = GABA.prog.e14.data@reductions$umap@cell.embeddings[,2]),as_tibble(peak.data))
 
 write.table(VIA.out, file="../analysis/VIA.out.GABA.opt2.csv", sep = ",")
-```
-
-<!-- # ```{r} -->
-<!-- # VIA.out <- cbind(tibble(barcode=colnames(s.data.e14),label = Idents(s.data.e14), UMAP_1 = s.data.e14@reductions$umap@cell.embeddings[,1], UMAP_2 = s.data.e14@reductions$umap@cell.embeddings[,2]),as_tibble(s.data.e14@reductions$lsi@cell.embeddings)) -->
-<!-- #  -->
-<!-- # write.table(VIA.out, file="../analysis/VIA.out.all.csv", sep = ",") -->
-<!-- # ``` -->
-
-
-
-```{r Look for ChromVar in DA regions}
-chvar.da <- lapply(list(pair1=c(46,148),pair2=c(46,146), pair3=c(146,148)),function(pair){
-  ChromVar_DA(da.features=da.features, id.1=pair[1], id.2=pair[2], motifs = PWMs, seurat.object = GABA.e14.data, genome = BSgenome.Mmusculus.UCSC.mm10)
-})
-
-```
-
-
-```{r}
-create_dt(chvar.da[[1]])
-```
-
-```{r}
-create_dt(chvar.da[[2]])
-```
-
-```{r}
-create_dt(chvar.da[[3]])
 ```
 
 # ENCODE comparison
@@ -583,7 +464,6 @@ peakAnno.edb.E14.feat <- annotatePeak(ol$peaklist$E14.features, tssRegion=c(-300
 pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/AnnoPie_E14_not_overlapping_ENCODE.pdf", width = 10, height = 8)
 plotAnnoPie(peakAnno.edb.E14.feat)
 dev.off()
-#vennpie(peakAnno.edb)
 ```
 
 ```{r Plot annoPie for E14 features overlapping ENCODE ones}
