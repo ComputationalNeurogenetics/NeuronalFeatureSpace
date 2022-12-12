@@ -29,4 +29,12 @@ b.	scATAC feature markers
 c.	TF motif accessibility
 d.	TF motif enrichments
 
-Additional analyses are coded in ClusterCircosPlots.Rmd
+Further downstream analyses are coded in ClusterCircosPlots.Rmd
+1. UMAP plots with clusters, brain region of origin and NT-types
+2. Circlize plot with all scATAC clusters
+3. Circlize plot with prominently GABAergic clusters only
+4. Filtering and formatting of DA feature results (calculated at HPC side with separate code)
+5. Draw clustered heatmap of pairwise DA feature differences
+6. Draw circlize plots of closest genes to DA features
+7. GO enrichement tests for closest genes
+8. Heatmap of top 3000 variable transcriptome of DI GABAergic clusters
