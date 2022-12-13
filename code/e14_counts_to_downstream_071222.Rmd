@@ -44,7 +44,8 @@ load.libs <- c(
   "cowplot",
   "universalmotif",
   "readxl",
-  "ComplexHeatmap")
+  "ComplexHeatmap",
+  "parallel")
 if (!require("pacman")) install.packages("pacman"); library(pacman)
 p_load(load.libs, update = FALSE, character.only = TRUE, install = FALSE)
 status <- sapply(load.libs,require,character.only = TRUE)
@@ -64,8 +65,6 @@ set.seed(2020);
 ```{r Setwd sample name specific variables, message=FALSE}
 sample.name <- "E14"
 run.date <- "071222"
-supp_data_path <- "~/Workspace/mm10/"
-cores=6
 std.aim <- 0.15
 ```
 
