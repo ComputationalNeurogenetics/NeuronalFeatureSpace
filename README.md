@@ -33,7 +33,7 @@ Further downstream analyses are coded in ClusterCircosPlots.Rmd
 1. UMAP plots with clusters, brain region of origin and NT-types
 2. Circlize plot with all scATAC clusters
 3. Circlize plot with prominently GABAergic clusters only
-4. Filtering and formatting of DA feature results (calculated at HPC side with separate code)
+4. Filtering and formatting of DA feature results (calculated at HPC side with separate code DA_pairwise_features.R)
 5. Draw clustered heatmap of pairwise DA feature differences
 6. Draw circlize plots of closest genes to DA features
 7. GO enrichement tests for closest genes
