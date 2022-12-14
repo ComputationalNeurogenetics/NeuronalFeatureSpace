@@ -58,6 +58,9 @@ DimPlot(s.data.e14, group.by = 'NT.type', pt.size = 0.1) + ggtitle("") + coord_f
 ```
 
 ```{r Plot clustering reliability, fig.width=10, fig.height=8}
+run.time <- format(Sys.time(), "%d-%m-%y")
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_reliability_",run.time,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 FeaturePlot(s.data.e14, features = 'silh.score', pt.size = 0.1, cols=c("orange","darkgreen")) + ggtitle("Cluster reliability") + coord_fixed()
 ```
 
