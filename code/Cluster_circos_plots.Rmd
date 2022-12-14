@@ -446,7 +446,7 @@ write.table(VIA.out, file="../analysis/VIA.out.GABA.opt2.csv", sep = ",")
 # ENCODE comparison
 
 ```{r Load ENCODE data for E14}
-Combined.brain.E14.cCREs <- readRDS(file="../../mm10/Combined.brain.E14.cCREs.Rds")
+Combined.brain.E14.cCREs <- readRDS(file="../metadata/Combined.brain.E14.cCREs.Rds")
 DefaultAssay(s.data.e14) <- "peaks"
 E14.features <- StringToGRanges(rownames(s.data.e14))
 ```
