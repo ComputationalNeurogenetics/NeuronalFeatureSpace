@@ -344,23 +344,23 @@ plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
 ```
 
 ```{r Comparison to E14.5 brain cCREs from ENCODE}
-ENCODE.Fore_cCREs <- readGeneric("../../mm10/Fore_ENCFF237YNH_ENCFF349REI_ENCFF279EVI.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
+ENCODE.Fore_cCREs <- readGeneric("../metadata/Fore_ENCFF237YNH_ENCFF349REI_ENCFF279EVI.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.Fore_cCREs <- ENCODE.Fore_cCREs[which(!elementMetadata(ENCODE.Fore_cCREs)[,ncol(elementMetadata(ENCODE.Fore_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
-ENCODE.MB_cCREs <- readGeneric("../../mm10/MB_ENCFF539CBL_ENCFF829ZIT_ENCFF104QAC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
+ENCODE.MB_cCREs <- readGeneric("../metadata/MB_ENCFF539CBL_ENCFF829ZIT_ENCFF104QAC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.MB_cCREs <- ENCODE.MB_cCREs[which(!elementMetadata(ENCODE.MB_cCREs)[,ncol(elementMetadata(ENCODE.MB_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
-ENCODE.Hind_cCREs <- readGeneric("../../mm10/Hind_ENCFF274NPS_ENCFF475FUT_ENCFF081VBW.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
+ENCODE.Hind_cCREs <- readGeneric("../metadata/Hind_ENCFF274NPS_ENCFF475FUT_ENCFF081VBW.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.Hind_cCREs <- ENCODE.Hind_cCREs[which(!elementMetadata(ENCODE.Hind_cCREs)[,ncol(elementMetadata(ENCODE.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
-ENCODE.E12.Hind_cCREs <- readGeneric("../../mm10/E12_hind_ENCFF344PSC_ENCFF333XRC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
+ENCODE.E12.Hind_cCREs <- readGeneric("../metadata/E12_hind_ENCFF344PSC_ENCFF333XRC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.E12.Hind_cCREs <- ENCODE.E12.Hind_cCREs[which(!elementMetadata(ENCODE.E12.Hind_cCREs)[,ncol(elementMetadata(ENCODE.E12.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
 Combined.brain.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs,ENCODE.E12.Hind_cCREs))
-saveRDS(Combined.brain.cCREs, file="../../mm10/Combined.brain.cCREs.Rds")
+saveRDS(Combined.brain.cCREs, file="../metadata/Combined.brain.cCREs.Rds")
 
 Combined.brain.E14.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs))
-saveRDS(Combined.brain.E14.cCREs, file="../../mm10/Combined.brain.E14.cCREs.Rds")
+saveRDS(Combined.brain.E14.cCREs, file="../metadata/Combined.brain.E14.cCREs.Rds")
 ```
 
 ```{r}
