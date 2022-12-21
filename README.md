@@ -2,7 +2,7 @@
 
 This is repository for code used in the manuscript "Neuron types in the developing mouse CNS can be divided into several epigenomic and transcriptomic classes".
 
-Main steps to reproduce analysis goes as described below by using Conda envs r411_291021 for step 1, and then r421 for steps after that. ViaEnv for VIA analysis.
+Main steps to reproduce analysis are described below. Use Conda envs r411_291021 for step 1, and then r421 for steps after that. ViaEnv for VIA analysis.
 
 1) Run JointFeatureSpace_220622.Rmd to create joint featurespace.
 2) Run R14_scRNA_071222.Rmd to merge and process scRNA samples together.
