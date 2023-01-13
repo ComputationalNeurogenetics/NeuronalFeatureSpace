@@ -781,6 +781,11 @@ top.markers_rna <- left_join(top.markers_rna, top_brain_reg)
 create_dt(as.data.frame.matrix(data.frame(top.markers_rna)))
 ```
 
+```{r NT-type vs brain region table}
+create_dt(as.data.frame.matrix(table(s.data$brain_region, s.data$NT.type)))
+```
+
+
 # Session info
 
 ```{r sessionInfo}
