@@ -12,6 +12,7 @@ library(RColorBrewer)
 library(future)
 library(GenomicRanges)
 library(EnsDb.Mmusculus.v79)
+library(org.Mm.eg.db)
 library(dendextend)
 library(DT)
 library(ChIPpeakAnno)
@@ -24,6 +25,7 @@ library(genomation)
 library(fpc)
 library(ggsci)
 library(qs)
+library(gUtils)
 source("AdditionalFunctions.R")
 ```
 
@@ -342,6 +344,15 @@ vennpie(peakAnno.edb)
 ```{r Distribution of features relative to TSS, fig.height=2.5, fig.width=8}
 plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
 ```
+
+```{r Plotting random granges}
+random.peaks <- shuffle(clade.peaks, TxDb=BSgenome.Mmusculus.UCSC.mm10)
+
+peakAnno.rand.edb <- annotatePeak(random.peaks, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
+
+plotAnnoPie(peakAnno.rand.edb)
+```
+
 
 ```{r Comparison to E14.5 brain cCREs from ENCODE}
 ENCODE.Fore_cCREs <- readGeneric("../metadata/Fore_ENCFF237YNH_ENCFF349REI_ENCFF279EVI.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
