@@ -133,49 +133,13 @@ circos.clear()
 dev.off()
 ```
 
-```{r, fig.width=8,fig.height=6}
-hcd_e14 <- hcd_e14 %>% color_branches(k=5)
-#prunned_dends <- prune_cutree_to_dendlist(hcd_e14,2)
-#sapply(prunned_dends, nleaves)
-
-#par(mfrow = c(2,3))
-plot(hcd_e14, main = "")
-#sapply(prunned_dends, plot)
-```
-
-```{r}
+```{r Calculate some background counts for attributes}
 global.nt.counts <- get_attribute_counts(s.data.e14,all.clusters=TRUE, attribute="NT.type")
 global.br.counts <- get_attribute_counts(s.data.e14,all.clusters=TRUE, attribute="brain_region")
 ```
 
-
-```{r global rel counts}
-global.res <- lapply(2:45, function(k){
-  prunned_dends <- prune_cutree_to_dendlist(hcd_e14,k)
-  res.tb.list <- lapply(1:length(prunned_dends),function(d){
-    
-    # NT.type
-    tmp.nt.counts <- get_attribute_counts(s.data.e14,clusters=labels(prunned_dends[[d]]), attribute="NT.type")
-    relevant.global.nt.counts <- global.nt.counts[names(tmp.nt.counts)]
-    nt.rel.enr <- (tmp.nt.counts/sum(tmp.nt.counts))/(relevant.global.nt.counts/sum(relevant.global.nt.counts))
-    
-    # Brain region
-    tmp.br.counts <- get_attribute_counts(s.data.e14,clusters=labels(prunned_dends[[d]]), attribute="brain_region")
-    relevant.global.br.counts <- global.br.counts[names(tmp.br.counts)]
-    br.rel.enr <- (tmp.br.counts/sum(tmp.br.counts))/(relevant.global.br.counts/sum(relevant.global.br.counts))
-    
-    # Format results
-    res <- c(nt.rel.enr,br.rel.enr)
-    res.tb <- tibble(attribute=names(res),rel.enr=res,prunned_tree=d)
-    return(res.tb)
-    })
-    return(data.table::rbindlist(res.tb.list))
-})
-
-```
-
-```{r nt rel counts}
-nt.res <- lapply(2:45, function(k){
+```{r NT type rel enrichment}
+nt.res <- lapply(1:10, function(k){
   prunned_dends <- prune_cutree_to_dendlist(hcd_e14,k)
   res.tb.list <- lapply(1:length(prunned_dends),function(d){
     # NT.type
@@ -193,8 +157,8 @@ nt.res <- lapply(2:45, function(k){
 
 ```
 
-```{r brain rel counts}
-brain.res <- lapply(2:45, function(k){
+```{r Brain region relative enrichment}
+brain.res <- lapply(1:10, function(k){
   prunned_dends <- prune_cutree_to_dendlist(hcd_e14,k)
   res.tb.list <- lapply(1:length(prunned_dends),function(d){
     
@@ -205,54 +169,80 @@ brain.res <- lapply(2:45, function(k){
     
     # Format results
     res <- c(br.rel.enr)
-    res.tb <- tibble(attribute=names(res),rel.enr=res,prunned_tree=d)
+    res.tb <- tibble(attribute=names(res),rel.enr=res,prunned_tree=d, clusters=list(as.integer(labels(prunned_dends[[d]]))))
     return(res.tb)
     })
     return(data.table::rbindlist(res.tb.list))
 })
-
 ```
 
-
-```{r}
+```{r Construct plot for brain region enrichments}
 pl.1.region <- lapply(1:length(brain.res),function(r){
   if (r==1){
-      ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(axis.text.x = element_blank(), legend.text = element_text(colour="black", size = 6, face = "bold"),legend.key.size = unit(.25, 'cm')) + xlab("Branches") 
+      ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(axis.text.x = element_blank(), legend.text = element_text(colour="black", size = 6, face = "bold"),legend.key.size = unit(.25, 'cm')) + xlab("") 
   } else {
-      ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(axis.text.x = element_blank(), legend.position="none") + xlab("Branches") 
+    new.idents <- construct_ident_vector(tree.branches = brain.res[[r]],old.idents=as.numeric(Idents(s.data.e14)))
+    s.data.e14 <- AddMetaData(s.data.e14, new.idents, col.name = "branch")
+    d.plot <- DimPlot(s.data.e14, group.by = "branch") + coord_fixed() + ggtitle("")
+    
+    b.plot <- ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.position="none") + xlab("")  + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
+    patchwork::wrap_plots(d.plot, b.plot, nrow = 1)
   }
 })
 ```
 
-```{r}
+```{r Construct plot for NT type enrichments}
 pl.1.nt.type <- lapply(1:length(nt.res),function(r){
   if (r==1){
-      ggplot(nt.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(axis.text.x = element_blank(), legend.text = element_text(colour="black", size = 6, face = "bold"),legend.key.size = unit(.25, 'cm')) + xlab("Branches") 
+      ggplot(nt.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.text = element_text(colour="black", size = 6, face = "bold"),legend.key.size = unit(.25, 'cm')) + xlab("") + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
   } else {
-      ggplot(nt.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(axis.text.x = element_blank(), legend.position="none") + xlab("Branches") 
+        new.idents <- construct_ident_vector(tree.branches = brain.res[[r]],old.idents=as.numeric(Idents(s.data.e14)))
+    s.data.e14 <- AddMetaData(s.data.e14, new.idents, col.name = "branch")
+    d.plot <- DimPlot(s.data.e14, group.by = "branch", pt.size = 0.1) + coord_fixed() + ggtitle("") + ylab("") + xlab("") + theme(legend.text = element_text(size=6), legend.key.size = unit(.025, 'cm'), axis.text.x = element_blank(), axis.text.y = element_blank(), plot.margin =unit(c(.01,.01,.01,.01), "cm"))
+    
+      b.plot <- ggplot(nt.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.position="none", plot.margin =unit(c(.01,.01,.01,.01), "cm")) + xlab("")  + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
+    patchwork::wrap_plots(b.plot, d.plot, nrow = 1)
   }
 })
 ```
 
+```{r Setting layouts}
+layout.left = "
+A#########
+BB########
+CCC#######
+DDDD######
+EEEEE#####
+FFFFFF####
+GGGGGGG###
+HHHHHHHH##
+IIIIIIIII#
+JJJJJJJJJJ
+"
 
-```{r Plot into multipage pdf}
-pdf(file = "../analysis/tree.branching.region.up.to.44.pdf", width = 8, height = 15, onefile = TRUE)
-patchwork::wrap_plots(pl.1.region[1:15], ncol = 1)
-patchwork::wrap_plots(pl.1.region[16:31], ncol = 1)
-patchwork::wrap_plots(pl.1.region[32:44], ncol = 1)
-dev.off()
-
+layout.right = "
+#########A
+########BB
+#######CCC
+######DDDD
+#####EEEEE
+####FFFFFF
+###GGGGGGG
+##HHHHHHHH
+#IIIIIIIII
+JJJJJJJJJJ
+"
 ```
 
 ```{r Rel.enric. region plots for manuscript}
 pdf(file = "../analysis/tree.branching.region.up.to.10.pdf", width = 8, height = 15, onefile = TRUE)
-patchwork::wrap_plots(pl.1.region[1:10], ncol = 1)
+patchwork::wrap_plots(pl.1.region[1:10], ncol = 1, design = layout.right)
 dev.off()
 ```
 
 ```{r Rel.enric. NT-type plots for manuscript}
 pdf(file = "../analysis/tree.branching.nt.type.up.to.10.pdf", width = 8, height = 15, onefile = TRUE)
-patchwork::wrap_plots(pl.1.nt.type[1:10], ncol = 1)
+patchwork::wrap_plots(pl.1.nt.type[1:10], ncol = 1, design = layout.left)
 dev.off()
 ```
 
