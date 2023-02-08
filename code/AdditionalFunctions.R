@@ -80,4 +80,153 @@ create_dt <- function(x){
                                                    c(10,25,50,"All"))))
 }
   
+# Some of following code has been sourced from Stackoverflow forums as freely provided examples, contributions belong to original authors
   
+prune_cutree_to_dendlist <- function(dend, k) {
+  clusters <- cutree(dend,k, order_clusters_as_data = FALSE)
+  dends <- vector("list", k)
+  for(i in 1:k) { 
+    leves_to_prune <- labels(dend)[clusters != i]
+    dends[[i]] <- prune(dend, leves_to_prune)
+  }
+  class(dends) <- "dendlist"
+  dends
+}
+
+get_attribute_counts <- function(seurat.data, clusters, all.clusters=FALSE, attribute=NULL){
+  if (all.clusters){
+    i <- TRUE
+  } else {
+    i <- which(seurat.data@meta.data[,"seurat_clusters"] %in% clusters)
+  }
+  return(table(seurat.data@meta.data[i,attribute]))
+}
+
+dendro_data_k <- function(hc, k) {
+  
+  hcdata    <-  ggdendro::dendro_data(hc, type = "rectangle")
+  seg       <-  hcdata$segments
+  labclust  <-  cutree(hc, k)[hc$order]
+  segclust  <-  rep(0L, nrow(seg))
+  heights   <-  sort(hc$height, decreasing = TRUE)
+  height    <-  mean(c(heights[k], heights[k - 1L]), na.rm = TRUE)
+  
+  for (i in 1:k) {
+    xi      <-  hcdata$labels$x[labclust == i]
+    idx1    <-  seg$x    >= min(xi) & seg$x    <= max(xi)
+    idx2    <-  seg$xend >= min(xi) & seg$xend <= max(xi)
+    idx3    <-  seg$yend < height
+    idx     <-  idx1 & idx2 & idx3
+    segclust[idx] <- i
+  }
+  
+  idx                    <-  which(segclust == 0L)
+  segclust[idx]          <-  segclust[idx + 1L]
+  hcdata$segments$clust  <-  segclust
+  hcdata$segments$line   <-  as.integer(segclust < 1L)
+  hcdata$labels$clust    <-  labclust
+  
+  hcdata
+}
+
+plot_ggdendro <- function(hcdata,
+                          direction   = c("lr", "rl", "tb", "bt"),
+                          fan         = FALSE,
+                          scale.color = NULL,
+                          branch.size = 1,
+                          label.size  = 3,
+                          nudge.label = 0.01,
+                          expand.y    = 0.1) {
+  
+  direction <- match.arg(direction) # if fan = FALSE
+  ybreaks   <- pretty(segment(hcdata)$y, n = 5)
+  ymax      <- max(segment(hcdata)$y)
+  
+  ## branches
+  p <- ggplot() +
+    geom_segment(data         =  segment(hcdata),
+                 aes(x        =  x,
+                     y        =  y,
+                     xend     =  xend,
+                     yend     =  yend,
+                     linetype =  factor(line),
+                     colour   =  factor(clust)),
+                 lineend      =  "round",
+                 show.legend  =  FALSE,
+                 size         =  branch.size)
+  
+  ## orientation
+  if (fan) {
+    p <- p +
+      coord_polar(direction = -1) +
+      scale_x_continuous(breaks = NULL,
+                         limits = c(0, nrow(label(hcdata)))) +
+      scale_y_reverse(breaks = ybreaks)
+  } else {
+    p <- p + scale_x_continuous(breaks = NULL)
+    if (direction %in% c("rl", "lr")) {
+      p <- p + coord_flip()
+    }
+    if (direction %in% c("bt", "lr")) {
+      p <- p + scale_y_reverse(breaks = ybreaks)
+    } else {
+      p <- p + scale_y_continuous(breaks = ybreaks)
+      nudge.label <- -(nudge.label)
+    }
+  }
+  
+  # labels
+  labelParams <- set_labels_params(nrow(hcdata$labels), direction, fan)
+  hcdata$labels$angle <- labelParams$angle
+  
+  p <- p +
+    geom_text(data        =  label(hcdata),
+              aes(x       =  x,
+                  y       =  y,
+                  label   =  label,
+                  colour  =  factor(clust),
+                  angle   =  angle),
+              vjust       =  labelParams$vjust,
+              hjust       =  labelParams$hjust,
+              nudge_y     =  ymax * nudge.label,
+              size        =  label.size,
+              show.legend =  FALSE)
+  
+  # colors and limits
+  if (!is.null(scale.color)) {
+    p <- p + scale_color_manual(values = scale.color)
+  }
+  
+  ylim <- -round(ymax * expand.y, 1)
+  p    <- p + expand_limits(y = ylim)
+  
+  p
+}
+
+set_labels_params <- function(nbLabels,
+                              direction = c("tb", "bt", "lr", "rl"),
+                              fan       = FALSE) {
+  if (fan) {
+    angle       <-  360 / nbLabels * 1:nbLabels + 90
+    idx         <-  angle >= 90 & angle <= 270
+    angle[idx]  <-  angle[idx] + 180
+    hjust       <-  rep(0, nbLabels)
+    hjust[idx]  <-  1
+  } else {
+    angle       <-  rep(0, nbLabels)
+    hjust       <-  0
+    if (direction %in% c("tb", "bt")) { angle <- angle + 45 }
+    if (direction %in% c("tb", "rl")) { hjust <- 1 }
+  }
+  list(angle = angle, hjust = hjust, vjust = 0.5)
+}
+
+construct_ident_vector <- function(tree.branches, old.idents){
+  new.ident <- rep(NA, length(old.idents))
+  branches.clusters <- as_tibble(tree.branches) %>% dplyr::select(prunned_tree, clusters) %>% distinct()
+  sapply(1:nrow(branches.clusters), function(r){
+    ii <- which(old.idents %in% branches.clusters[r,"clusters"][[1]][[1]])
+    new.ident[ii] <<-r
+    })
+  return(new.ident)
+}
