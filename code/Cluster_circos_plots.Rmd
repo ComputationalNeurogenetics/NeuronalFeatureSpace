@@ -149,7 +149,7 @@ nt.res <- lapply(1:10, function(k){
     
     # Format results
     res <- c(nt.rel.enr)
-    res.tb <- tibble(attribute=names(res),rel.enr=res,prunned_tree=d)
+    res.tb <- tibble(attribute=names(res),rel.enr=res,prunned_tree=d, clusters=list(as.integer(labels(prunned_dends[[d]]))))
     return(res.tb)
     })
     return(data.table::rbindlist(res.tb.list))
@@ -179,13 +179,13 @@ brain.res <- lapply(1:10, function(k){
 ```{r Construct plot for brain region enrichments}
 pl.1.region <- lapply(1:length(brain.res),function(r){
   if (r==1){
-      ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(axis.text.x = element_blank(), legend.text = element_text(colour="black", size = 6, face = "bold"),legend.key.size = unit(.25, 'cm')) + xlab("") 
+      ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.text = element_text(colour="black", size = 6, face = "bold"),legend.key.size = unit(.25, 'cm')) + xlab("") + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
   } else {
-    new.idents <- construct_ident_vector(tree.branches = brain.res[[r]],old.idents=as.numeric(Idents(s.data.e14)))
+        new.idents <- construct_ident_vector(tree.branches = brain.res[[r]],old.idents=as.numeric(Idents(s.data.e14)))
     s.data.e14 <- AddMetaData(s.data.e14, new.idents, col.name = "branch")
-    d.plot <- DimPlot(s.data.e14, group.by = "branch") + coord_fixed() + ggtitle("")
+    d.plot <- DimPlot(s.data.e14, group.by = "branch", pt.size = 0.1, cols = DiscretePalette(length(unique(new.idents)), palette = "polychrome")) + coord_fixed() + ggtitle("") + ylab("") + xlab("") + theme(legend.text = element_text(size=6), legend.key.size = unit(.025, 'cm'), axis.text.x = element_blank(), axis.text.y = element_blank(), plot.margin =unit(c(.01,.01,.01,.01), "cm"))
     
-    b.plot <- ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.position="none") + xlab("")  + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
+      b.plot <- ggplot(brain.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.position="none", plot.margin =unit(c(.01,.01,.01,.01), "cm")) + xlab("")  + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
     patchwork::wrap_plots(d.plot, b.plot, nrow = 1)
   }
 })
@@ -198,7 +198,7 @@ pl.1.nt.type <- lapply(1:length(nt.res),function(r){
   } else {
         new.idents <- construct_ident_vector(tree.branches = brain.res[[r]],old.idents=as.numeric(Idents(s.data.e14)))
     s.data.e14 <- AddMetaData(s.data.e14, new.idents, col.name = "branch")
-    d.plot <- DimPlot(s.data.e14, group.by = "branch", pt.size = 0.1) + coord_fixed() + ggtitle("") + ylab("") + xlab("") + theme(legend.text = element_text(size=6), legend.key.size = unit(.025, 'cm'), axis.text.x = element_blank(), axis.text.y = element_blank(), plot.margin =unit(c(.01,.01,.01,.01), "cm"))
+    d.plot <- DimPlot(s.data.e14, group.by = "branch", pt.size = 0.1, cols = DiscretePalette(length(unique(new.idents)), palette = "polychrome")) + coord_fixed() + ggtitle("") + ylab("") + xlab("") + theme(legend.text = element_text(size=6), legend.key.size = unit(.025, 'cm'), axis.text.x = element_blank(), axis.text.y = element_blank(), plot.margin =unit(c(.01,.01,.01,.01), "cm"))
     
       b.plot <- ggplot(nt.res[[r]], aes(fill=attribute, y=rel.enr, x=prunned_tree)) + geom_bar(position="stack", stat="identity") + scale_fill_brewer(palette = "Set3") + theme(legend.position="none", plot.margin =unit(c(.01,.01,.01,.01), "cm")) + xlab("")  + scale_x_continuous(breaks=1:r, labels=as.character(1:r))
     patchwork::wrap_plots(b.plot, d.plot, nrow = 1)
