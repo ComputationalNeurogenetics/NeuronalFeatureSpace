@@ -347,24 +347,16 @@ plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
 dev.off()
 ```
 
-```{r Plotting random granges}
-random.peaks <- shuffle(clade.peaks, TxDb=BSgenome.Mmusculus.UCSC.mm10)
-peakAnno.rand.edb <- annotatePeak(random.peaks, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
-
-plotAnnoPie(peakAnno.rand.edb)
-plotAnnoBar(list(randomized=peakAnno.rand.edb,joined_feature_space=peakAnno.edb))
-```
-
-
 ```{r Calculating 1000 randomizations of locations and annotations, echo=FALSE}
 rand.anno.vectors <- sapply(1:1000, function(r){
   random.peaks <- shuffle(clade.peaks, TxDb=BSgenome.Mmusculus.UCSC.mm10)
 peakAnno.rand.edb <- annotatePeak(random.peaks, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
   return(peakAnno.rand.edb@annoStat[,2])
 })
+saveRDS(rand.anno.vectors,file="rand.anno.vectors.Rds")
 ```
 
-```{r Fisher.exact test of observed vs expected per annotation category}
+```{r Fisher.exact test of observed vs expected per annotation category, warning=FALSE}
 observed.per.anno.category <- (peakAnno.edb@annoStat[,2]/100)*peakAnno.edb@peakNum
 expected.per.anno.category <- (rowMeans(rand.anno.vectors)/100)*peakAnno.rand.edb@peakNum
 
@@ -384,9 +376,17 @@ fisher.res <- lapply(1:length(observed.per.anno.category),function(i){
 })
 
 names(fisher.res) <- names(observed.per.anno.category)
-
 ```
 
+
+```{r Plotting random granges}
+# Take joined feature space anno results object and replace numbers with from 1000 randomization
+random.peakAnno <- peakAnno.edb
+random.peakAnno@annoStat[,2] <- rowMeans(rand.anno.vectors)
+
+plotAnnoPie(random.peakAnno)
+plotAnnoBar(list(randomized=random.peakAnno,joined_feature_space=peakAnno.edb))
+```
 
 ```{r Comparison to E14.5 brain cCREs from ENCODE}
 ENCODE.Fore_cCREs <- readGeneric("../metadata/Fore_ENCFF237YNH_ENCFF349REI_ENCFF279EVI.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
@@ -422,8 +422,6 @@ pdf(file="VENN_BRAIN_ENCODE_vs_all.pdf", width = 15, height = 15)
 makeVennDiagram(Peaks=list(clade.peaks,unique(Combined.brain.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
 dev.off()
 ```
-
-
 
 Vs. for example 287 587 features in separately defined E14Di feature space.
 
