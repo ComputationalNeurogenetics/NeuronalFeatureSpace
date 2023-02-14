@@ -32,6 +32,8 @@ source("AdditionalFunctions.R")
 
 ```{r Read E14 merged data}
 s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.071222.RNA.pos.idents.qs", nthreads = 6)
+
+scRNA.e14.data <- readRDS("scRNA_data/E14scRNAseq.071222.Rds")
 ```
 
 ```{r UMAP, fig.width=10, fig.height=8}
@@ -65,7 +67,7 @@ FeaturePlot(s.data.e14, features = 'silh.score', pt.size = 0.1, cols=c("orange",
 ```
 
 
-```{r Calculate NT type counts and proportions}
+```{r Calculate NT type counts and proportions scATAC}
 nt.type.counts <- table(data.frame(Idents(s.data.e14),s.data.e14$NT.type))
 nt.type.prop <- apply(nt.type.counts,1,function(x){
   if(sum(x)>0){
@@ -74,8 +76,7 @@ nt.type.prop <- apply(nt.type.counts,1,function(x){
   })
 ```
 
-
-```{r Calculate brain region counts and proportions}
+```{r Calculate brain region counts and proportions scATAC}
 brain.region.counts <- table(data.frame(Idents(s.data.e14),s.data.e14$brain_region))
 brain.region.prop <- apply(brain.region.counts,1,function(x){
   if(sum(x)>0){
@@ -83,6 +84,37 @@ brain.region.prop <- apply(brain.region.counts,1,function(x){
     } else {x}
   })
 ```
+
+```{r Calculate NT type counts and proportions scRNA}
+nt.type.counts.scRNA <- table(data.frame(Idents(scRNA.e14.data),scRNA.e14.data$NT.type))
+nt.type.prop.scRNA <- apply(nt.type.counts.scRNA,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+```
+
+```{r Calculate brain region counts and proportions scRNA}
+brain.region.counts.scRNA <- table(data.frame(Idents(scRNA.e14.data),scRNA.e14.data$brain_region))
+brain.region.prop.scRNA <- apply(brain.region.counts.scRNA,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+```
+
+
+```{r Calculate number of clusters with >.75 mojority in regions and NT-types}
+# Repeat for b in 1:3
+lapply(1:8,function(i){sum(nt.type.prop[i,]>0.75 & brain.region.prop[b,]>0.75)})
+# and
+lapply(1:8,function(i){sum(nt.type.prop[i,]>0.75)})
+#And same for scRNA object
+lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.75 & brain.region.prop.scRNA[b,]>0.75)})
+# and
+lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.75)})
+```
+
 
 
 ```{r Calculate dendrogram of all clusters}
