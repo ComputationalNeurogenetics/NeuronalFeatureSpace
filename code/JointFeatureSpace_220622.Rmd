@@ -416,7 +416,9 @@ ggplot(tibble(feat.widths=ranges(unique(Combined.brain.cCREs))@width),aes(x=feat
 ```{r, fig.width=6, fig.height=2}
 #ggplot(tibble(feat.widths=ranges(clade.peaks)@width),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") + theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(0, 5000, by = 500))  + ggtitle("Features in scATAC space")
 feat.widths <- tibble(feat.widths=ranges(clade.peaks)@width)
-ggplot(feat.widths,aes(x=feat.widths)) + geom_boxplot(fill="grey", outlier.shape = NA) + theme_minimal() + theme(text = element_text(size=30),axis.ticks.y = element_blank(),axis.text.y = element_blank()) + xlab("Feature length") + scale_x_continuous(limits = quantile(feat.widths$feat.widths, c(0.1, 0.9)))
+pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_length_boxplot.pdf", width = 6, height = 2)
+ggplot(feat.widths,aes(x=feat.widths)) + geom_boxplot(fill="grey", outlier.shape = NA) + theme_classic() + theme(text = element_text(size=40),axis.ticks.y = element_blank(),axis.text.y = element_blank()) + xlab("Feature length") + scale_x_continuous(limits = quantile(feat.widths$feat.widths, c(0.1, 0.9)))
+dev.off()
 ```
 
 ```{r, fig.height=24, fig.width=24}
