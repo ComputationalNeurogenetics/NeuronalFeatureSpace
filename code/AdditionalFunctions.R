@@ -230,3 +230,36 @@ construct_ident_vector <- function(tree.branches, old.idents){
     })
   return(new.ident)
 }
+
+prepare_comp_circos_data <- function(da_features=da_features, id.1, id.2, avg_log2FC.limit=0.75, s.data){
+  
+  feat.1 <- DA_feats(da.features = da_features, id.1=id.1, id.2=id.2, avg_log2FC.limit = avg_log2FC.limit)
+  feat.2 <- DA_feats(da.features = da_features, id.1=id.2, id.2=id.1, avg_log2FC.limit = avg_log2FC.limit)
+  
+  dat.1 <- map(feat.1, function(x) {
+    tmp <- unlist(str_split(x, pattern = "-"))
+    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=id.1) 
+  }) %>% bind_rows() %>% mutate_at(c("start", "end"), .funs=as.numeric)
+  
+  dat.2 <- map(feat.2, function(x) {
+    tmp <- unlist(str_split(x, pattern = "-"))
+    tibble(chr = tmp[1], start=tmp[2], end=tmp[3],side=id.2) 
+  }) %>% bind_rows() %>% mutate_at(c("start", "end"), .funs=as.numeric)
+  
+  dat <- bind_rows(dat.1, dat.2)
+  
+  closest.gene.1.genes <- as_tibble(ClosestFeature(object=s.data, regions=feat.1)) %>% pull(gene_name)
+  closest.gene.1.dist <- as_tibble(ClosestFeature(object=s.data, regions=feat.1)) %>% pull(distance)
+  
+  closest.gene.2.genes <- as_tibble(ClosestFeature(object=s.data, regions=feat.2)) %>% pull(gene_name)
+  closest.gene.2.dist <- as_tibble(ClosestFeature(object=s.data, regions=feat.2)) %>% pull(distance)
+  
+  dat$label <- c(closest.gene.1.genes,closest.gene.2.genes)
+  dat$distance <- c(closest.gene.1.dist,closest.gene.2.dist)
+  dat$color <- ifelse(dat$side==id.1, "red","blue")
+  return(dat)
+}
+
+DA_feats <- function(da.features, id.1, id.2, avg_log2FC.limit=0.75, p_val_adj_limit = 0.05){
+  da_features[[id.1]][[id.2]] %>% dplyr::filter((avg_log2FC >= avg_log2FC.limit) & p_val_adj <= p_val_adj_limit) %>% pull(feature)
+}
