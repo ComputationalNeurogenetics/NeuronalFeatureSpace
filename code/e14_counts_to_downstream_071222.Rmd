@@ -715,6 +715,7 @@ scATAC.clusters <- Idents(s.data)
 scRNA.clusters <- s.data@meta.data$predicted.id
 
 conf.mat <- table(as.factor(scRNA.clusters),scATAC.clusters)
+scRNA.scATAC.purity<-sum(apply(conf.mat,1,function(x){max(x)}))/sum(conf.mat)
 create_dt(as.data.frame.matrix(conf.mat))
 ```
 
