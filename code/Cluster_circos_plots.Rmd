@@ -115,8 +115,6 @@ lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.75 & brain.region.prop.scRNA
 lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.75)})
 ```
 
-
-
 ```{r Calculate dendrogram of all clusters}
 e14.cluster.averages <- AverageExpression(s.data.e14, assays="peaks")
 cell.dist.e14 <- proxy::dist(e14.cluster.averages$peaks, method="cosine", by_rows=FALSE)
@@ -124,7 +122,6 @@ hclust_cells_e14 <- hclust(cell.dist.e14, method="ward.D2")
 hcd_e14 <- as.dendrogram(hclust_cells_e14)
 hcd_e14 <- dendextend::set(hcd_e14,what="branches_lwd", value=8)
 ```
-
 
 ```{r Plot all cluster dendrogam with Circos, fig.width=24, fig.height=24}
 run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
@@ -406,33 +403,6 @@ col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("whit
 Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),title="kbp",grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)), cluster_rows=TRUE, cluster_columns = TRUE)
 ```
 
-```{r Calculate number of open features per cluster}
-binarized.features <- BinarizeCounts(s.data.e14[["peaks"]]@data)
-
-open.per.cluster <- sapply(levels(Idents(s.data.e14)), function(x){
-  i <- which(Idents(s.data.e14)==x)
-  bin.subset <- binarized.features[,i]
-  sum(rowSums(bin.subset)>0)
-})
-open.per.cluster
-
-open.30.per.cluster <- sapply(levels(Idents(s.data.e14)), function(x){
-  i <- which(Idents(s.data.e14)==x)
-  bin.subset <- binarized.features[,i]
-  sum((rowSums(bin.subset)/ncol(bin.subset))>0.3)
-})
-open.30.per.cluster
-
-
-open.50.per.cluster <- sapply(levels(Idents(s.data.e14)), function(x){
-  i <- which(Idents(s.data.e14)==x)
-  bin.subset <- binarized.features[,i]
-  sum((rowSums(bin.subset)/ncol(bin.subset))>0.5)
-})
-open.50.per.cluster
-
-```
-
 ```{r Draw closest gene circoses for cluster pairs,fig.height=15, fig.width=15}
 id.1 <- 19
 id.2 <- 122
@@ -461,6 +431,26 @@ draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom
 
 circos.clear()
 ```
+
+```{r DE genes between Di DLX GABA pairs}
+# Pair 18 vs 60
+dlx.cluster.markers.pair.1 <- rownames_to_column(FindMarkers(Dlx.GABA.e14.data, assay = "RNA_name", ident.1 = 18, ident.2 = 60), var = "gene_symbol") %>% as_tibble()
+
+closest.genes.pair.1 <- prepare_comp_circos_data(da_features = da_features, id.1=18,id.2=60, s.data=s.data.e14, avg_log2FC.limit = 0.7)
+
+intersect(closest.genes.pair.1 %>% pull(label), dlx.cluster.markers.pair.1 %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05) %>% pull(gene_symbol))
+
+
+# Pair 18 vs 60
+dlx.cluster.markers.pair.2 <- rownames_to_column(FindMarkers(Dlx.GABA.e14.data, assay = "RNA_name", ident.1 = 122, ident.2 = 19), var = "gene_symbol") %>% as_tibble()
+
+closest.genes.pair.2 <- prepare_comp_circos_data(da_features = da_features, id.1=122,id.2=19, s.data=s.data.e14, avg_log2FC.limit = 0.7)
+
+intersect(closest.genes.pair.2 %>% pull(label), dlx.cluster.markers.pair.2 %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05) %>% pull(gene_symbol))
+
+```
+
+
 ```{r GeneOntology test for closest genes 122}
 clust.122 <- data.frame(genes=dplyr::filter(dat.1, color=="blue") %>%  pull(label),cat=1)
 
@@ -511,11 +501,11 @@ ht2 <- Heatmap(Dlx.exp.mat, col=col_fun, show_row_names = FALSE, show_column_nam
 
 draw(ht2)
 dev.off()
-# left_annotation = rowAnnotation(cluster.names = anno_block(gp = gpar(fill =  c("steelblue", "orange","green","red")[c(1,2,3,4)]),labels = c("P3", "MGE", "Ret.Th./LGN", "GABA+NP")[c(1,2,3,4)], labels_gp = gpar(col = "black", fontsize = 10)))
 ```
+
 ```{r DE genes between 4 Dlx clusters}
 dlx.cluster.markers <- FindAllMarkers(Dlx.GABA.e14.data, assay = "RNA_name")
-dlx.cluster.markers.tb <- as_tibble(dlx.cluster.markers) %>% filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05)
+dlx.cluster.markers.tb <- as_tibble(dlx.cluster.markers) %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05)
 create_dt(dlx.cluster.markers.tb)
 ```
 
@@ -538,8 +528,6 @@ row_ha <- rowAnnotation(scATAC.cluster = Idents(R1.GABA.e14.data), col = list(sc
 col_fun = colorRamp2(c(0, mean(R1.exp.mat),max(R1.exp.mat)), c("blue","white", "red"))
 
 Heatmap(R1.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=7, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression"), bottom_annotation = col_ha)
-
-#left_annotation = rowAnnotation(cluster.names = anno_block(gp = gpar(fill =  c("steelblue", "orange","green","red","grey","purple","yellow")[c(2,5,7,1,6,4,3)]),labels = c("l R1 GABA neur.", "d R1 GABA precur.", "early/migr.", "d R1 GABA (DTg)", "dl R1 GABA precur.", "d R1 GABA neur. (Foxp2)", "l R1 GABA precur.")[c(2,5,7,1,6,4,3)], labels_gp = gpar(col = "black", fontsize = 6)))
 
 ```
 
