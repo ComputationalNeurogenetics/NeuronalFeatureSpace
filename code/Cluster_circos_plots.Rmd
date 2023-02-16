@@ -432,25 +432,6 @@ draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom
 circos.clear()
 ```
 
-```{r DE genes between Di DLX GABA pairs}
-# Pair 18 vs 60
-dlx.cluster.markers.pair.1 <- rownames_to_column(FindMarkers(Dlx.GABA.e14.data, assay = "RNA_name", ident.1 = 18, ident.2 = 60), var = "gene_symbol") %>% as_tibble()
-
-closest.genes.pair.1 <- prepare_comp_circos_data(da_features = da_features, id.1=18,id.2=60, s.data=s.data.e14, avg_log2FC.limit = 0.7)
-
-intersect(closest.genes.pair.1 %>% pull(label), dlx.cluster.markers.pair.1 %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05) %>% pull(gene_symbol))
-
-
-# Pair 18 vs 60
-dlx.cluster.markers.pair.2 <- rownames_to_column(FindMarkers(Dlx.GABA.e14.data, assay = "RNA_name", ident.1 = 122, ident.2 = 19), var = "gene_symbol") %>% as_tibble()
-
-closest.genes.pair.2 <- prepare_comp_circos_data(da_features = da_features, id.1=122,id.2=19, s.data=s.data.e14, avg_log2FC.limit = 0.7)
-
-intersect(closest.genes.pair.2 %>% pull(label), dlx.cluster.markers.pair.2 %>% dplyr::filter((avg_log2FC > 0.5 | avg_log2FC < -0.5) & p_val_adj <0.05) %>% pull(gene_symbol))
-
-```
-
-
 ```{r GeneOntology test for closest genes 122}
 clust.122 <- data.frame(genes=dplyr::filter(dat.1, color=="blue") %>%  pull(label),cat=1)
 
