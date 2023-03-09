@@ -122,7 +122,7 @@ nt.types.per.cluster.50 <- apply(nt.type.prop,2,function(i){
   if (max(i)>.5) {
     rownames(nt.type.prop)[which.max(i)]
   } else {
-      "mixed"
+      "NA"
     }
   })
 
@@ -134,7 +134,7 @@ brain.regions.per.cluster.50 <- apply(brain.region.prop,2,function(i){
   if (max(i)>.5) {
     rownames(brain.region.prop)[which.max(i)]
   } else {
-      "mixed"
+      "NA"
     }
   })
 
