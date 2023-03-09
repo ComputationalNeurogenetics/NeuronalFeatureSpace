@@ -33,7 +33,7 @@ source("AdditionalFunctions.R")
 ```{r Read E14 merged data}
 s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.071222.RNA.pos.idents.qs", nthreads = 6)
 
-scRNA.e14.data <- readRDS("scRNA_data/E14scRNAseq.071222.Rds")
+scRNA.e14.data <- readRDS("../scRNA_data/E14scRNAseq.071222.Rds")
 ```
 
 ```{r UMAP, fig.width=10, fig.height=8}
@@ -104,16 +104,51 @@ brain.region.prop.scRNA <- apply(brain.region.counts.scRNA,1,function(x){
 ```
 
 
-```{r Calculate number of clusters with >.75 mojority in regions and NT-types}
+```{r Calculate number of clusters with >.5 mojority in regions and NT-types}
 # Repeat for b in 1:3
-lapply(1:8,function(i){sum(nt.type.prop[i,]>0.75 & brain.region.prop[b,]>0.75)})
+lapply(1:8,function(i){sum(nt.type.prop[i,]>0.55 & brain.region.prop[b,]>0.55)})
 # and
-lapply(1:8,function(i){sum(nt.type.prop[i,]>0.75)})
+lapply(1:8,function(i){sum(nt.type.prop[i,]>0.5)})
+
 #And same for scRNA object
-lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.75 & brain.region.prop.scRNA[b,]>0.75)})
+lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.55 & brain.region.prop.scRNA[b,]>0.55)})
 # and
-lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.75)})
+lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.5)})
 ```
+
+
+```{r Calling 50% majority nt-type for each cluster}
+nt.types.per.cluster.50 <- apply(nt.type.prop,2,function(i){
+  if (max(i)>.5) {
+    rownames(nt.type.prop)[which.max(i)]
+  } else {
+      "no majority found"
+    }
+  })
+
+nt.types.per.cluster.50 <- tibble(cluster=as.numeric(names(nt.types.per.cluster.50)), "top_nt_type"=nt.types.per.cluster.50)
+```
+
+```{r Calling 50% majority brain region for each cluster}
+brain.regions.per.cluster.50 <- apply(brain.region.prop,2,function(i){
+  if (max(i)>.5) {
+    rownames(brain.region.prop)[which.max(i)]
+  } else {
+      "no majority found"
+    }
+  })
+
+brain.regions.per.cluster.50 <- tibble(cluster=as.numeric(names(brain.regions.per.cluster.50)), "top_brain_region"=brain.regions.per.cluster.50)
+```
+
+```{r Add 50% cluster type calls to CombiROC results}
+combiroc.tb <- readxl::read_xlsx("../analysis/CombiROC_results.xlsx")[,c(1,4)]
+
+supp.table.4 <- left_join(combiroc.tb, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50)
+
+create_dt(supp.table.4)
+```
+
 
 ```{r Calculate dendrogram of all clusters}
 e14.cluster.averages <- AverageExpression(s.data.e14, assays="peaks")
