@@ -294,7 +294,7 @@ embryo.batch.clade.prop <- apply(embryo.batch.clade,2,function(x){x/sum(x)})
 ```
 
 ```{r Draw circos plot with brain regions stacked barplot, fig.height=24, fig.width=24}
-pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Clade_circos_repl_genotype.pdf", width = 24, height = 24)
+pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Clade_circos_batch.pdf", width = 24, height = 24)
 
 hcd.upper.circ  <- hcd.upper
 par(mar = rep(4,4))
@@ -306,30 +306,30 @@ circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd.upper.circ, "height")
 
-circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(t(sample.clade.prop),1:ncol(sample.clade)-0.5, col=ggsci::pal_jco()(4))
-}, track.height =.10, bg.border = NA)
+#circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+#   circos.barplot(t(sample.clade.prop),1:ncol(sample.clade)-0.5, col=ggsci::pal_jco()(4))
+#}, track.height =.10, bg.border = NA)
 
-circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(t(genotype.clade.prop),1:ncol(genotype.clade)-0.5, col=ggsci::pal_npg()(nrow(genotype.clade)))
-}, track.height =.10, bg.border = NA)
+#circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+#   circos.barplot(t(genotype.clade.prop),1:ncol(genotype.clade)-0.5, #col=ggsci::pal_npg()(nrow(genotype.clade)))
+#}, track.height =.10, bg.border = NA)
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
    circos.barplot(t(embryo.batch.clade.prop),1:ncol(embryo.batch.clade)-0.5, col=ggsci::pal_nejm()(nrow(embryo.batch.clade)))
 }, track.height =.10, bg.border = NA)
 
-circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(t(embryo.clade.prop),1:ncol(embryo.clade)-0.5, col=ggsci::pal_igv()(nrow(embryo.clade)))
-}, track.height =.10, bg.border = NA)
+#circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+#   circos.barplot(t(embryo.clade.prop),1:ncol(embryo.clade)-0.5, col=ggsci::pal_igv()(nrow(embryo.clade)))
+#}, track.height =.10, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
    circos.dendrogram(hcd.upper.circ, max_height = max_height)
 }, track.height =.30, bg.border = NA)
 
 lgd_barplot = packLegend(
-  Legend(at = rownames(sample.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_jco()(4), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(6, "mm")),
-    Legend(at = rownames(genotype.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_npg()(nrow(genotype.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Genotype", size = unit(6, "mm")),
-      Legend(at = rownames(embryo.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_igv()(nrow(embryo.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(6, "mm")),
+  #Legend(at = rownames(sample.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_jco()(4), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(6, "mm"))#,
+    #Legend(at = rownames(genotype.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_npg()(nrow(genotype.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Genotype", size = unit(6, "mm"))#,
+      #Legend(at = rownames(embryo.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_igv()(nrow(embryo.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(6, "mm"))#,
       Legend(at = rownames(embryo.batch.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_nejm()(nrow(embryo.batch.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Batch date", size = unit(6, "mm"))
     )
 
