@@ -701,6 +701,27 @@ top.markers_motifs <- as_tibble(motif.markers) %>% dplyr::filter(pvalue <= 0.01)
 save(list=c("top.markers_rna","top.markers_atac","top.markers_chromvar","top.markers_motifs","closest.features"), file=paste("../analysis/",sample.name,"_RNApos_ATAC_cluster_markers.",run.date,".RData", sep=""))
 ```
 
+```{r Adding genotype info to the object}
+genotype <- ifelse(s.data$replicate %in% c("_di_0","_mb_0","_r1_0"), "Pax7cre, TdT", "WT")
+s.data <- AddMetaData(s.data, metadata = genotype, col.name = "genotype")
+```
+
+```{r Plotting genotype DimPlot}
+DefaultAssay(s.data) <- "peaks"
+DimPlot(s.data, group.by = "genotype", shuffle = TRUE)
+```
+
+```{r Plotting replicate DimPlot}
+DefaultAssay(s.data) <- "peaks"
+DimPlot(s.data, group.by = "replicate", shuffle = TRUE)
+```
+```{r Combined replicate genotype info DimPlot}
+pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Replicate_Genotype_scATAC_UMAP.pdf", width = 8, height = 6)
+s.data <- AddMetaData(s.data, metadata = paste(s.data$replicate,s.data$genotype,sep="_"), col.name = "repl.geno")
+DimPlot(s.data, group.by = "repl.geno", shuffle = TRUE) + labs(title = "Replicate/Genotype")
+dev.off()
+```
+
 # Saving data for downstream analyses
 
 ```{r Saving data for downstream analyses}

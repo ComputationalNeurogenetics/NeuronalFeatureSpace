@@ -156,6 +156,47 @@ neuronal.merged.filt <- RunSVD(object = neuronal.merged.filt)
 qsave(neuronal.merged.filt, paste("neuronal.merged.clade.phase.filt.",run.date,".qs",sep=""), nthreads = 6)
 ```
 
+```{r Add replicate genotype and embryo info for batch effect checking}
+replicate <- neuronal.merged.filt$replicate
+
+# Which E12R1
+e12r1.il <- grepl(names(replicate), pattern = "^_e12r1_.*")
+replicate[e12r1.il] <- paste("_e12r1",replicate[e12r1.il], sep="")
+
+# Which E14DI
+e14di.il <- grepl(names(replicate), pattern = "^_e14di_.*")
+replicate[e14di.il] <- paste("_e14di",replicate[e14di.il], sep="")
+
+# Which E14MB
+e14mb.il <- grepl(names(replicate), pattern = "^_e14vmb_.*")
+replicate[e14mb.il] <- paste("_e14mb",replicate[e14mb.il], sep="")
+
+# Which E14R1
+e14r1.il <- grepl(names(replicate), pattern = "^_e14vr1_.*")
+replicate[e14r1.il] <- paste("_e14r1",replicate[e14r1.il], sep="")
+
+genotype <- ifelse(replicate %in% c("_e14di_0","_e14mb_0","_e14r1_0"), "Pax7cre, TdT", "WT")
+neuronal.merged.filt <- AddMetaData(neuronal.merged.filt, metadata=paste(replicate,genotype,sep="_"), col.name = "repl.genotype")
+neuronal.merged.filt <- AddMetaData(neuronal.merged.filt, metadata=genotype, col.name = "genotype")
+
+embryo <- rep("",length(replicate))
+embryo.batch <- rep("",length(replicate))
+
+embryo.batch[replicate %in% c("_e14mb_0", "_e14di_0","_e14r1_0")] <- "6.8.20"
+embryo[replicate %in% c("_e14mb_0", "_e14di_0")] <- "6.8.20_E14_embryo1"
+embryo[replicate %in% c("_e14r1_0")] <- "6.8.20_E14_embryo2"
+embryo[replicate %in% c("_e12r1_0")] <- "6.10.20_E12_embryo1"
+embryo[replicate %in% c("_e12r1_1")] <- "6.10.20_E12_embryo2"
+
+embryo.batch[replicate %in% c("_e14mb_1", "_e14di_1","_e14r1_1","_e14mb_2", "_e14di_2","_e14r1_2","_e12r1_0","_e12r1_1")] <- "6.10.20"
+embryo[replicate %in% c("_e14mb_1", "_e14di_1","_e14r1_1")] <- "6.10.20_E14_embryo1"
+embryo[replicate %in% c("_e14mb_2", "_e14di_2","_e14r1_2")] <- "6.10.20_E14_embryo2"
+
+neuronal.merged.filt <- AddMetaData(neuronal.merged.filt, metadata=embryo.batch, col.name = "embryo.batch")
+
+neuronal.merged.filt <- AddMetaData(neuronal.merged.filt, metadata=embryo, col.name = "embryo")
+```
+
 ```{r Correlation between depth and reduced dimension components}
 DepthCor(neuronal.merged.filt)
 ```
@@ -213,15 +254,15 @@ par(mai=c(2,.5,.25,.25),cex=.75)
 h =5.5
 hcd.cut <- cut(hcd, h = h)
 hcd.upper<-hcd.cut$upper
-hcd.upper.clusters<-cutree(hcd.upper,h=h)
-hcd.upper<-reindex_dend(hcd.upper)
+hcd.upper.clusters<-dendextend::cutree(hcd.upper,h=h)
+hcd.upper<-dendextend::reindex_dend(hcd.upper)
 # Find out why this needs to be done, what is not reset in the object after cut but is reset after conversion back and worth
 hcd.upper<-as.dendrogram(as.hclust(hcd.upper))
-n.term.nodes <- sapply(hcd.cut$lower,count_terminal_nodes)
+n.term.nodes <- sapply(hcd.cut$lower,dendextend::count_terminal_nodes)
 leaf.labels <- paste("Clade #",hcd.upper.clusters,": ",n.term.nodes," cells",sep="")
-hcd.upper<-set_labels(hcd.upper,leaf.labels)
+hcd.upper<-dendextend::set_labels(hcd.upper,leaf.labels)
 #color_branches(hcd.upper,clusters=hcd.upper.clusters,col=color.vector(hcd.upper.clusters)) 
-hcd.upper %>% set("branches_lwd",5) %>% set("labels_cex",1.2) %>% plot(center=T)
+hcd.upper %>% dendextend::set("branches_lwd",5) %>% dendextend::set("labels_cex",1.2) %>% plot(center=T)
 abline(h = h, lty = 2, col="red", lwd=2)
 ```
 
@@ -238,32 +279,62 @@ rownames(sample.clade)[which(rownames(sample.clade)=="e14vr1")] <- "e14r1"
 sample.clade
 
 sample.clade.prop <- apply(sample.clade,2,function(x){x/sum(x)})
+
+repl.genotype <- table(neuronal.merged.filt$repl.genotype,lsi_cells$cells_tree_cut)
+repl.genotype.prop <- apply(repl.genotype,2,function(x){x/sum(x)})
+
+genotype.clade <- table(neuronal.merged.filt$genotype,lsi_cells$cells_tree_cut)
+genotype.clade.prop <- apply(genotype.clade,2,function(x){x/sum(x)})
+
+embryo.clade <- table(neuronal.merged.filt$embryo,lsi_cells$cells_tree_cut)
+embryo.clade.prop <- apply(embryo.clade,2,function(x){x/sum(x)})
+
+embryo.batch.clade <- table(neuronal.merged.filt$embryo.batch,lsi_cells$cells_tree_cut)
+embryo.batch.clade.prop <- apply(embryo.batch.clade,2,function(x){x/sum(x)})
 ```
 
 ```{r Draw circos plot with brain regions stacked barplot, fig.height=24, fig.width=24}
+pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Clade_circos_repl_genotype.pdf", width = 24, height = 24)
+
 hcd.upper.circ  <- hcd.upper
 par(mar = rep(4,4))
 circos.initialize("leaf.labels", xlim = c(0, ncol(sample.clade)))
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:ncol(sample.clade)-0.5, rep(0, ncol(sample.clade)), labels(hcd.upper.circ), col = labels_colors(hcd.upper.circ),
+   circos.text(1:ncol(sample.clade)-0.5, rep(0, ncol(sample.clade)), labels(hcd.upper.circ), col = dendextend::labels_colors(hcd.upper.circ),
                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.2)
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd.upper.circ, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(t(sample.clade.prop),1:ncol(sample.clade)-0.5, col=pal_jco()(4))
-}, track.height =.15, bg.border = NA)
+   circos.barplot(t(sample.clade.prop),1:ncol(sample.clade)-0.5, col=ggsci::pal_jco()(4))
+}, track.height =.10, bg.border = NA)
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(t(genotype.clade.prop),1:ncol(genotype.clade)-0.5, col=ggsci::pal_npg()(nrow(genotype.clade)))
+}, track.height =.10, bg.border = NA)
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(t(embryo.batch.clade.prop),1:ncol(embryo.batch.clade)-0.5, col=ggsci::pal_nejm()(nrow(embryo.batch.clade)))
+}, track.height =.10, bg.border = NA)
+
+circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+   circos.barplot(t(embryo.clade.prop),1:ncol(embryo.clade)-0.5, col=ggsci::pal_igv()(nrow(embryo.clade)))
+}, track.height =.10, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
    circos.dendrogram(hcd.upper.circ, max_height = max_height)
-}, track.height =.60, bg.border = NA)
+}, track.height =.30, bg.border = NA)
 
 lgd_barplot = packLegend(
-  Legend(at = rownames(sample.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=pal_jco()(4), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
+  Legend(at = rownames(sample.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_jco()(4), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(6, "mm")),
+    Legend(at = rownames(genotype.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_npg()(nrow(genotype.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Genotype", size = unit(6, "mm")),
+      Legend(at = rownames(embryo.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_igv()(nrow(embryo.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(6, "mm")),
+      Legend(at = rownames(embryo.batch.clade.prop), type = "points",labels_gp = gpar(col = "black", cex = 2), legend_gp = gpar(col=ggsci::pal_nejm()(nrow(embryo.batch.clade)), lwd = 2), title_position = "topleft", title_gp = gpar(cex = 2), title = "Batch date", size = unit(6, "mm"))
     )
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
+dev.off()
 ```
 
 # Macs2 and peak detection
@@ -342,51 +413,17 @@ vennpie(peakAnno.edb)
 ```
 
 ```{r Distribution of features relative to TSS, fig.height=2.5, fig.width=8}
-pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/feat2TSS.pdf", width=8, height = 2.5)
 plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
-dev.off()
 ```
-
-```{r Calculating 1000 randomizations of locations and annotations, echo=FALSE}
-rand.anno.vectors <- sapply(1:1000, function(r){
-  random.peaks <- shuffle(clade.peaks, TxDb=BSgenome.Mmusculus.UCSC.mm10)
-peakAnno.rand.edb <- annotatePeak(random.peaks, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
-  return(peakAnno.rand.edb@annoStat[,2])
-})
-saveRDS(rand.anno.vectors,file="rand.anno.vectors.Rds")
-```
-
-```{r Fisher.exact test of observed vs expected per annotation category, warning=FALSE}
-observed.per.anno.category <- (peakAnno.edb@annoStat[,2]/100)*peakAnno.edb@peakNum
-expected.per.anno.category <- (rowMeans(rand.anno.vectors)/100)*peakAnno.rand.edb@peakNum
-
-names(observed.per.anno.category) <- peakAnno.edb@annoStat[,1]
-names(expected.per.anno.category) <- peakAnno.edb@annoStat[,1]
-
-fisher.res <- lapply(1:length(observed.per.anno.category),function(i){
-  n.expected.in.categ <- expected.per.anno.category[i]
-  n.expected.not.in.categ <- peakAnno.rand.edb@peakNum - n.expected.in.categ
-    
-  n.observed.in.categ <- observed.per.anno.category[i]
-  n.observed.not.in.categ <- peakAnno.edb@peakNum - n.observed.in.categ
-  
-  cont.table.temp <- data.table(in.categ=c(n.expected.in.categ,n.observed.in.categ), not.in.categ=c(n.expected.not.in.categ,n.observed.not.in.categ))
-  rownames(cont.table.temp) <- c("expected","observed")
-  fisher.test(cont.table.temp)
-})
-
-names(fisher.res) <- names(observed.per.anno.category)
-```
-
 
 ```{r Plotting random granges}
-# Take joined feature space anno results object and replace numbers with from 1000 randomization
-random.peakAnno <- peakAnno.edb
-random.peakAnno@annoStat[,2] <- rowMeans(rand.anno.vectors)
+random.peaks <- shuffle(clade.peaks, TxDb=BSgenome.Mmusculus.UCSC.mm10)
 
-plotAnnoPie(random.peakAnno)
-plotAnnoBar(list(randomized=random.peakAnno,joined_feature_space=peakAnno.edb))
+peakAnno.rand.edb <- annotatePeak(random.peaks, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
+
+plotAnnoPie(peakAnno.rand.edb)
 ```
+
 
 ```{r Comparison to E14.5 brain cCREs from ENCODE}
 ENCODE.Fore_cCREs <- readGeneric("../metadata/Fore_ENCFF237YNH_ENCFF349REI_ENCFF279EVI.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
@@ -413,12 +450,8 @@ ggplot(tibble(feat.widths=ranges(unique(Combined.brain.cCREs))@width),aes(x=feat
 ```
 
 
-```{r, fig.width=6, fig.height=2}
-#ggplot(tibble(feat.widths=ranges(clade.peaks)@width),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") + theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(0, 5000, by = 500))  + ggtitle("Features in scATAC space")
-feat.widths <- tibble(feat.widths=ranges(clade.peaks)@width)
-pdf(file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_length_boxplot.pdf", width = 6, height = 2)
-ggplot(feat.widths,aes(x=feat.widths)) + geom_boxplot(fill="grey", outlier.shape = NA) + theme_classic() + theme(text = element_text(size=40),axis.ticks.y = element_blank(),axis.text.y = element_blank()) + xlab("Feature length") + scale_x_continuous(limits = quantile(feat.widths$feat.widths, c(0.1, 0.9)))
-dev.off()
+```{r, fig.width=10, fig.height=6}
+ggplot(tibble(feat.widths=ranges(clade.peaks)@width),aes(x=feat.widths)) + geom_histogram(bins=50) + theme_minimal() + xlab("Feature length in bp") + ylab("Count") + theme(text = element_text(size=20)) + scale_x_continuous(breaks = seq(0, 5000, by = 500))  + ggtitle("Features in scATAC space")
 ```
 
 ```{r, fig.height=24, fig.width=24}
@@ -426,6 +459,8 @@ pdf(file="VENN_BRAIN_ENCODE_vs_all.pdf", width = 15, height = 15)
 makeVennDiagram(Peaks=list(clade.peaks,unique(Combined.brain.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
 dev.off()
 ```
+
+
 
 Vs. for example 287 587 features in separately defined E14Di feature space.
 
