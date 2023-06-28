@@ -8,15 +8,23 @@ require(qs)
 
 source("./R/pipeline.R")
 
-s.data <- qread("../NeuronalFeatureSpace/scATAC_data/s.data.merged.for.chooseR.qs", nthreads=10)
+#s.data <- qread("../NeuronalFeatureSpace/scATAC_data/s.data.merged.for.chooseR_q0.qs", nthreads=4)
 
-npcs <- 2:58
-resolutions <- seq(12,14,by=0.1)
+s.data <- qread("../NeuronalFeatureSpace/scRNA_data/E14_scRNA_for_chooseR_280623.qs", nthreads=6)
+
+#std.proportion.lsi<- sapply(2:length(s.data@reductions$lsi@stdev),function(x){s.data@reductions$lsi@stdev[x]/s.data@reductions$lsi@stdev[2]})
+
+std.proportion.pca <- sapply(2:length(s.data@reductions$pca@stdev),function(x){s.data@reductions$pca@stdev[x]/s.data@reductions$pca@stdev[2]})
+
+max.dim <- which.min(abs(std.proportion.pca-0.15))
+npcs <- 2:max.dim
+
+resolutions <- seq(1,20,by=1)
 #resolutions <- c(0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4,2.6,2.8,3,3.2,3.4,3.6,3.8,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20)
 #resolutions.cont <- c(11,12,13,14,15,16,17,18,19,20)
-assay <- "peaks"
-reduction <- "lsi"
-results_path <- "results_leiden/"
+assay <- "RNA"
+reduction <- "pca"
+results_path <- "results_leiden_RNA/"
 algorithm <- 4
 random.seed <- 2020
 
