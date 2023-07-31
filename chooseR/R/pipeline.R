@@ -1,6 +1,6 @@
 # Functions used directly in the analysis and example script
 
-source("R/helper_functions.R")
+source("../chooseR/R/helper_functions.R")
 `%>%` <- magrittr::`%>%`
 
 #' Run multiple clusters on the same Seurat Object
@@ -48,7 +48,7 @@ multiple_cluster <- function(
   # Repeated clusters
   j <- 1
   for (idx in samples) {
-    message(paste0("\tClustering ", j, "..."))
+    message_parallel(paste0("\tClustering ", j, "..."))
     small_obj <- obj[, idx]
     small_obj <- find_clusters(
       small_obj,
@@ -139,7 +139,7 @@ percent_match <- function(x, n = 100) {
 group_scores <- function(tbl, clusters) {
   colnames(tbl) <- clusters
   data <- tbl %>%
-    tibble::add_column("cell_1" = clusters) %>%
+    tibble::add_column("cell_1" = clusters, .name_repair = "minimal") %>%
     tidyr::pivot_longer(-cell_1, names_to = "cell_2", values_to = "percent") %>%
     dplyr::group_by(cell_1, cell_2) %>%
     dplyr::summarise("avg_percent" = mean(percent)) %>%
