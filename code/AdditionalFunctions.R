@@ -69,7 +69,23 @@ convert_feature_identity <- function(object, assay, features, feature.format = "
       print()
     
     return (v.out)
-}}
+  }
+  
+  # Case: otherwise provided symbols => conversion to ENS IDs
+  object.features <- object[[assay]][[]] %>%
+    rownames_to_column(var = "gene_id") %>%
+    as_tibble() %>%
+    dplyr::select("gene_id", "feature_symbol") %>%
+    dplyr::filter(feature_symbol %in% features)
+  
+  match.index <- match(features, object.features$feature_symbol, nomatch = NA)
+  v.out <- sapply(match.index, function (i) { ifelse(is.na(i), NA, object.features$gene_id[i])})
+  
+  sprintf("Instance: Found matching for %d features out of total %d provided features", sum(!is.na(v.out)), length(features)) %>%
+    print()
+  
+  return (v.out)
+  }
   
 create_dt <- function(x){
     DT::datatable(x,
