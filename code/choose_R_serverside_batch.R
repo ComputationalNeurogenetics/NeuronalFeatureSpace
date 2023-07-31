@@ -23,12 +23,12 @@ std.proportion.pca <- sapply(1:length(s.data@reductions$pca@stdev),function(x){s
 max.dim <- which.min(abs(std.proportion.pca-0.15))
 npcs <- 1:max.dim
 
-resolutions <- seq(1,20,by=1)
+resolutions <- seq(11,20,by=1)
 #resolutions <- c(0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4,2.6,2.8,3,3.2,3.4,3.6,3.8,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20)
 #resolutions.cont <- c(11,12,13,14,15,16,17,18,19,20)
 assay <- "RNA"
 reduction <- "pca"
-results_path <- "../results_leiden_RNA/"
+results_path <- "../results_leiden_RNA_batch/"
 algorithm <- 4
 random.seed <- 2020
 
@@ -102,4 +102,4 @@ message_parallel(paste0("Grouping ", res, "..."))
   saveRDS(grp, paste0(results_path, "frequency_grouped_", res, ".rds"))
   sil <- group_sil(sil, res)
   saveRDS(sil, paste0(results_path, "silhouette_grouped_", res, ".rds"))
-  }, mc.cores=2)
+  }, mc.cores=10)
