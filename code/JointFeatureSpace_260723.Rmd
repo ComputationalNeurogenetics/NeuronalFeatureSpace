@@ -3,6 +3,13 @@ title: R Notebook of studies into defining joint neuronal scATAC feature space f
 output:  html_notebook
 ---
 
+```{r}
+if (Sys.info()[['sysname']]=="Linux"){
+.libPaths(c("/projappl/project_2006402/r422_packages", .libPaths()))
+libpath <- .libPaths()[1]
+}
+```
+
 ```{r Libraries, include=FALSE}
 library(Seurat)
 library(Signac)
