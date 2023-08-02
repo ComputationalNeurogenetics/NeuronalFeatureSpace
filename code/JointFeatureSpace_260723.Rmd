@@ -350,7 +350,8 @@ clade.peaks
 ```
 
 ```{r Store clade peaks for further use}
-saveRDS(clade.peaks,paste("../analysis/joint.clade.peaks.",run.date,".Rds",sep=""))
+#saveRDS(clade.peaks,paste("../analysis/joint.clade.peaks.",run.date,".Rds",sep=""))
+clade.peaks <- readRDS(paste("../analysis/joint.clade.peaks.",run.date,".Rds",sep=""))
 ```
 
 # Looking for correspondence between joint feature space and separate ones
@@ -408,7 +409,9 @@ vennpie(peakAnno.edb)
 ```
 
 ```{r Distribution of features relative to TSS, fig.height=2.5, fig.width=8}
+pdf(width = 9, height = 3, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_distribution_to_TSS.",run.date,".pdf",sep=""))
 plotDistToTSS(peakAnno.edb, title="Distribution of features relative to TSS")
+dev.off()
 ```
 
 ```{r Plotting random granges}
@@ -418,6 +421,20 @@ peakAnno.rand.edb <- annotatePeak(random.peaks, tssRegion=c(-3000, 3000),TxDb=ed
 
 plotAnnoPie(peakAnno.rand.edb)
 ```
+
+```{r Draw stacked barplot version of the pie charts, fig.height=6, fig.width=8}
+peak.anno.act <- tibble(Feature=peakAnno.edb@annoStat$Feature, Frequency=peakAnno.edb@annoStat$Frequency, Case="scATAC features")
+
+peak.anno.rand <- tibble(Feature=peakAnno.rand.edb@annoStat$Feature, Frequency=peakAnno.rand.edb@annoStat$Frequency, Case="Random")
+
+combined.anno <- rbind(peak.anno.act,peak.anno.rand)
+
+pdf(width = 8, height = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_stackedbarplot.",run.date,".pdf",sep=""))
+ggplot(combined.anno, aes(fill=Case, y=Frequency, x=Feature)) + 
+    geom_bar(position="stack", stat="identity") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=20), axis.text.y = element_text(size=20)) + xlab("")
+dev.off()
+```
+
 
 
 ```{r Comparison to E14.5 brain cCREs from ENCODE}
@@ -430,11 +447,11 @@ ENCODE.MB_cCREs <- ENCODE.MB_cCREs[which(!elementMetadata(ENCODE.MB_cCREs)[,ncol
 ENCODE.Hind_cCREs <- readGeneric("../metadata/Hind_ENCFF274NPS_ENCFF475FUT_ENCFF081VBW.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
 ENCODE.Hind_cCREs <- ENCODE.Hind_cCREs[which(!elementMetadata(ENCODE.Hind_cCREs)[,ncol(elementMetadata(ENCODE.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
 
-ENCODE.E12.Hind_cCREs <- readGeneric("../metadata/E12_hind_ENCFF344PSC_ENCFF333XRC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
-ENCODE.E12.Hind_cCREs <- ENCODE.E12.Hind_cCREs[which(!elementMetadata(ENCODE.E12.Hind_cCREs)[,ncol(elementMetadata(ENCODE.E12.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
-
-Combined.brain.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs,ENCODE.E12.Hind_cCREs))
-saveRDS(Combined.brain.cCREs, file="../metadata/Combined.brain.cCREs.Rds")
+# ENCODE.E12.Hind_cCREs <- readGeneric("../metadata/E12_hind_ENCFF344PSC_ENCFF333XRC.7group.bed", remove.unusual = TRUE, header=FALSE, keep.all.metadata = TRUE)
+# ENCODE.E12.Hind_cCREs <- ENCODE.E12.Hind_cCREs[which(!elementMetadata(ENCODE.E12.Hind_cCREs)[,ncol(elementMetadata(ENCODE.E12.Hind_cCREs))-1] %in% c("Low-DNase", "Unclassified"))]
+# 
+# Combined.brain.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs,ENCODE.E12.Hind_cCREs))
+# saveRDS(Combined.brain.cCREs, file="../metadata/Combined.brain.cCREs.Rds")
 
 Combined.brain.E14.cCREs <- do.call("c", GRangesList(ENCODE.Fore_cCREs, ENCODE.MB_cCREs, ENCODE.Hind_cCREs))
 saveRDS(Combined.brain.E14.cCREs, file="../metadata/Combined.brain.E14.cCREs.Rds")
@@ -450,7 +467,7 @@ ggplot(tibble(feat.widths=ranges(clade.peaks)@width),aes(x=feat.widths)) + geom_
 ```
 
 ```{r, fig.height=24, fig.width=24}
-pdf(file="VENN_BRAIN_ENCODE_vs_all.pdf", width = 15, height = 15)
+pdf(file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/VENN_BRAIN_ENCODE_vs_all.",run.date,".pdf",sep=""), width = 15, height = 15)
 makeVennDiagram(Peaks=list(clade.peaks,unique(Combined.brain.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
 dev.off()
 ```

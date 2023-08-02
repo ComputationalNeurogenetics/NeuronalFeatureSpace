@@ -279,3 +279,24 @@ prepare_comp_circos_data <- function(da_features=da_features, id.1, id.2, avg_lo
 DA_feats <- function(da.features, id.1, id.2, avg_log2FC.limit=0.75, p_val_adj_limit = 0.05){
   da_features[[id.1]][[id.2]] %>% dplyr::filter((avg_log2FC >= avg_log2FC.limit) & p_val_adj <= p_val_adj_limit) %>% pull(feature)
 }
+
+
+
+RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different slots of a Seurat object. Run this before integration. Run this before integration. It only changes obj@assays$RNA@counts, @data and @scale.data.
+  print("Run this before integration. It only changes obj@assays$RNA@counts, @data and @scale.data.")
+  obj[['RNA_name']] <- obj[['RNA']]
+  RNA <- obj@assays$RNA_name
+  if (length(RNA@scale.data) > 0){
+    tmp.conv <- tibble(id=RNA@counts@Dimnames[[1]], symbol=newnames)
+  }
+  
+  if (nrow(RNA) == length(newnames)) {
+    if (length(RNA@counts) >0 & class(RNA@data)[1]=="dgCMatrix") {RNA@counts@Dimnames[[1]]            <- newnames}
+    if (length(RNA@data) >0 ){ RNA@data@Dimnames[[1]]                <- newnames}
+    if (length(RNA@scale.data) > 0 & !is.matrix(RNA@scale.data)){RNA@scale.data@Dimnames[[1]]    <- newnames}
+    if (length(RNA@scale.data) > 0 & is.matrix(RNA@scale.data)){rownames(RNA@scale.data)    <- tmp.conv$symbol[match(rownames(RNA@scale.data),tmp.conv$id)]}
+    #if (length(RNA@scale.data)) dimnames(RNA@scale.data)[[1]]    <- tmp.conv$symbol[match(dimnames(RNA@scale.data)[[1]],tmp.conv$id)]
+  } else {"Unequal gene sets: nrow(RNA) != nrow(newnames)"}
+  obj@assays$RNA_name <- RNA
+  return(obj)
+}
