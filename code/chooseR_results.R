@@ -6,9 +6,9 @@ require(tidyverse)
 resolutions <- c(seq(1,20,by=1))
 #assay <- "peaks"
 #reduction <- "lsi"
-results_path <- "./results_leiden/"
+results_path <- "../results_E14_040823/"
 
-source("./R/pipeline.R")
+source("../chooseR/R/pipeline.R")
 # Create silhouette plot
 # Read in scores and calculate CIs
 scores <- purrr::map(
@@ -42,7 +42,7 @@ meds$max.cell.count <- sapply(counts,function(x){summary(as.numeric(x))[6]})
 writexl::write_xlsx(meds, paste0(results_path, "median_ci.xlsx"))
 
 # Plot cluster size statistical summary values
-ggplot(meds, aes(x=1:38)) + geom_line(aes(y=min.cell.count, colour="Min")) + geom_line(aes(y=max.cell.count, colour="Max")) + geom_line(aes(y=median.cell.count, colour="Median")) + geom_line(aes(y=mean.cell.count, colour="Mean")) + geom_line(aes(y=first.quarter.cell.count, colour="1st quarter")) + geom_line(aes(y=third.quarter.cell.count, colour="3rd quarter")) + ylab("Cell count") + ggtitle("Number of cells per cluster per resolution value - statistical summary values") + theme_minimal() + scale_x_continuous(breaks = seq(1, 20, by = 1)) + scale_y_continuous(breaks = seq(0, 600, by = 50)) + theme(text=element_text(size=16)) + xlab("Resolution")
+ggplot(meds, aes(x=seq(1,20,by=1))) + geom_line(aes(y=min.cell.count, colour="Min")) + geom_line(aes(y=max.cell.count, colour="Max")) + geom_line(aes(y=median.cell.count, colour="Median")) + geom_line(aes(y=mean.cell.count, colour="Mean")) + geom_line(aes(y=first.quarter.cell.count, colour="1st quarter")) + geom_line(aes(y=third.quarter.cell.count, colour="3rd quarter")) + ylab("Cell count") + ggtitle("Number of cells per cluster per resolution value - statistical summary values") + theme_minimal() + scale_x_continuous(breaks = seq(1, 20, by = 1)) + scale_y_continuous(breaks = seq(0, 600, by = 50)) + theme(text=element_text(size=16)) + xlab("Resolution")
 
 # Find thresholds
 threshold <- max(meds$low_med)
@@ -132,5 +132,5 @@ scores.out <- scores %>%
   dplyr::arrange(dplyr::desc(avg_sil)) %>%
   dplyr::mutate_at("cluster", ordered, levels = .$cluster)
 
-saveRDS(scores.out,file="./results_leiden/scores.Rds")
+saveRDS(scores.out,file="../results_leiden_RNA_batch/scores.Rds")
 
