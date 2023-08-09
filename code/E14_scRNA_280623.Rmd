@@ -12,6 +12,7 @@ library(org.Mm.eg.db);
 library(DT);
 library(data.table);
 library(qs)
+library(readxl)
 library(ggsci)
 library(grid)
 library(randomcoloR)
@@ -110,14 +111,12 @@ VlnPlot(s.data_RNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), nc
 s.data_RNA <- NormalizeData(s.data_RNA, normalization.method = "LogNormalize", scale.factor = 10000)
 ```
 
-
+```{r Finding variable features}
+s.data_RNA <- FindVariableFeatures(s.data_RNA, selection.method = "vst", nfeatures = 3000)
+```
 
 ```{r Scaling data while regressing percent.mt}
 s.data_RNA <- ScaleData(s.data_RNA, vars.to.regress = c("percent.mt","nFeature_RNA","nCount_RNA"))
-```
-
-```{r Finding variable features}
-s.data_RNA <- FindVariableFeatures(s.data_RNA, selection.method = "vst", nfeatures = 3000)
 ```
 
 ```{r Identify 10 most highly variable genes}
@@ -156,7 +155,7 @@ qsave(s.data_RNA, file=paste("../scRNA_data/E14_scRNA_for_chooseR.",run.date,".q
 # Using script choose_R_server_side.R 
 # Summarize results with chooseR_results.R
 # Continue with selected r value
-s.data_RNA <- qread(file="../scRNA_data/E14_scRNA_for_chooseR_280623.qs", nthreads = 6)
+s.data_RNA <- qread(file="../scRNA_data/E14_scRNA_for_chooseR.010823.qs", nthreads = 6)
 ```
 
 
@@ -164,7 +163,7 @@ s.data_RNA <- qread(file="../scRNA_data/E14_scRNA_for_chooseR_280623.qs", nthrea
 reduction <- "pca"
 assay <- "RNA"
 resolution <- 5
-algorithm <- 4
+algorithm <- 1
 random.seed <- 2020
 s.data_RNA <- Seurat::FindNeighbors(
     s.data_RNA,
@@ -177,7 +176,7 @@ s.data_RNA <- Seurat::FindClusters(
 	algorithm = algorithm,
     resolution = resolution,
 	random.seed = random.seed,
-    graph.name = paste("S",reduction, assay, sep = "."),
+    graph.name = paste("N",reduction, assay, sep = "."),
     verbose = FALSE
   )
 
@@ -213,8 +212,8 @@ s.data_RNA<-RenameGenesSeurat(s.data_RNA,s.data_RNA[["RNA"]]@meta.features[,1])
 DefaultAssay(s.data_RNA) <- 'RNA_name'
 
 mouse.cc.genes <- read_xlsx("../metadata/Mouse_S_and_G2m_genes_KA.xlsx", sheet = "Sheet2")
-mouse.g2m.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="G2m") %>% pull(gene_name)
-mouse.s.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="S") %>% pull(gene_name)
+mouse.g2m.genes <- dplyr::filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="G2m") %>% pull(gene_name)
+mouse.s.genes <- dplyr::filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="S") %>% pull(gene_name)
 
 #Creating scores for artificial genes: s & g2m 
 s.data_RNA <- CellCycleScoring(
