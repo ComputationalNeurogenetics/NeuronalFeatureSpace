@@ -307,7 +307,7 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run
   require(Signac)
   require(GenomicRanges)
   plan("multisession", workers = cores)
-  options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
+  options(future.globals.maxSize = 150 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
   
   # RNA activity estimation
   genomic.metadata <- GenomicRanges::mcols(Annotation(s.data[['peaks']]))
