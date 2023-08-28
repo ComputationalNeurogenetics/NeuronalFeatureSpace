@@ -302,6 +302,11 @@ RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different
 }
 
 doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run.date=run.date, max.lsi.dim){
+  require(Seurat)
+  require(Signac)
+  plan("multisession", workers = cores)
+  options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
+  
   # RNA activity estimation
   genomic.metadata <- mcols(Annotation(s.data[['peaks']]))
   # Generate conversion table from gene_name to gene_id
@@ -390,8 +395,8 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run
   coembed <- RunUMAP(coembed, dims = 2:30)
   coembed@meta.data$CellType <- ifelse(!is.na(coembed@meta.data$CellType), coembed@meta.data$CellType, coembed@meta.data$predicted.id)
   
-  qsave(s.data, file=paste(results.path,"/E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
-  qsave(coembed, file=paste(results.path,"/E14_coembed.",run.date,".qs",sep=""), nthreads = cores)
+  qsave(s.data, file=paste(results.path,"E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
+  qsave(coembed, file=paste(results.path,"E14_coembed.",run.date,".qs",sep=""), nthreads = cores)
   return(s.data)
 }
 
