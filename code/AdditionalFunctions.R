@@ -310,12 +310,12 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   options(future.globals.maxSize = 150 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
   
   # RNA activity estimation
-  genomic.metadata <- GenomicRanges::mcols(Annotation(s.data[['peaks']]))
+  genomic.metadata <- GenomicRanges::mcols(Annotation(scATAC.data[['peaks']]))
   # Generate conversion table from gene_name to gene_id
   gene_name2gene_id <- as_tibble(genomic.metadata[,c("gene_name","gene_id")])
   
   # Calculate gene activity estimate from scATAC reads based on the scATAC, by using gene_names as function does not support any other id
-  gene.activities <- GeneActivity(s.data, assay="peaks")
+  gene.activities <- GeneActivity(scATAC.data, assay="peaks")
   
   # Store gene_names
   gene.names <- rownames(gene.activities)
@@ -330,16 +330,16 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   rownames(gene.activities.gene_id) <- ensmusg.ids[non.na.i]
   
   # Add the gene activity matrix to the Seurat object as a new assay
-  s.data[['Activity']] <- CreateAssayObject(counts = gene.activities.gene_id)
-  s.data <- NormalizeData(
-    object = s.data,
+  scATAC.data[['Activity']] <- CreateAssayObject(counts = gene.activities.gene_id)
+  scATAC.data <- NormalizeData(
+    object = scATAC.data,
     assay = 'Activity',
     normalization.method = 'LogNormalize',
-    scale.factor = median(s.data$nCount_Activity)
+    scale.factor = median(scATAC.data$nCount_Activity)
   )
   
-  # Add gene_name to gene_id mapping into the s.data[['Activity']] assays metadata
-  s.data[['Activity']]<- AddMetaData(s.data[['Activity']], col.name = "feature_symbol", metadata = gene_names[non.na.i])
+  # Add gene_name to gene_id mapping into the scATAC.data[['Activity']] assays metadata
+  scATAC.data[['Activity']]<- AddMetaData(scATAC.data[['Activity']], col.name = "feature_symbol", metadata = gene_names[non.na.i])
   
   #Perform label transfer
   
@@ -348,7 +348,7 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   # Finding transfer anchors
   transfer.anchors <- FindTransferAnchors(
     reference = scRNA.data,
-    query = s.data,
+    query = scATAC.data,
     reduction = 'cca',
     reference.assay="RNA",
     query.assay = "Activity",
@@ -358,37 +358,37 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   predicted.labels <- TransferData(   
     anchorset = transfer.anchors,
     refdata = scRNA.data@meta.data$CellType,
-    weight.reduction = s.data[['lsi']],
+    weight.reduction = scATAC.data[['lsi']],
     dims = 2:max.lsi.dim
   )
   
   predicted.NT.labels <- TransferData(
     anchorset = transfer.anchors,
     refdata = scRNA.data@meta.data$NT.type,
-    weight.reduction = s.data[['lsi']],
+    weight.reduction = scATAC.data[['lsi']],
     dims = 2:max.lsi.dim
   )
   
-  s.data <- AddMetaData(object = s.data, metadata = apply(predicted.NT.labels,1,max), col.name ="RNA.predicted.NT")
-  s.data <- AddMetaData(s.data, metadata = predicted.labels)
+  scATAC.data <- AddMetaData(object = scATAC.data, metadata = apply(predicted.NT.labels,1,max), col.name ="RNA.predicted.NT")
+  scATAC.data <- AddMetaData(scATAC.data, metadata = predicted.labels)
   
   #Perform scRNA data imputation
   DefaultAssay(scRNA.data) <- "RNA"
   refdata <- GetAssayData(scRNA.data, assay = "RNA", slot = "data")
   
   scRNA.data@meta.data$tech<-"scRNA"
-  s.data@meta.data$tech<-"scATAC"
+  scATAC.data@meta.data$tech<-"scATAC"
   
-  imputation <- TransferData(anchorset = transfer.anchors, refdata = refdata, weight.reduction = s.data[["lsi"]], dims = 2:max.lsi.dim)
-  s.data[["RNA"]] <- imputation
+  imputation <- TransferData(anchorset = transfer.anchors, refdata = refdata, weight.reduction = scATAC.data[["lsi"]], dims = 2:max.lsi.dim)
+  scATAC.data[["RNA"]] <- imputation
   
-  # Copy feature metadata from scRNA.data to s.data
+  # Copy feature metadata from scRNA.data to scATAC.data
   s.data_rna.feature.metadata <- scRNA.data[["RNA"]][[]]
-  s.data[["RNA"]] <- AddMetaData(s.data[["RNA"]], metadata = s.data_rna.feature.metadata[rownames(s.data[["RNA"]]),"feature_symbol"], col.name = "feature_symbol")
-  qsave(s.data, file=paste(results.path,"E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
+  scATAC.data[["RNA"]] <- AddMetaData(scATAC.data[["RNA"]], metadata = s.data_rna.feature.metadata[rownames(scATAC.data[["RNA"]]),"feature_symbol"], col.name = "feature_symbol")
+  qsave(scATAC.data, file=paste(results.path,"E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
   
-  coembed <- merge(x = scRNA.data, y = s.data)
-  rm(s.data)
+  coembed <- merge(x = scRNA.data, y = scATAC.data)
+  rm(scATAC.data)
   rm(scRNA.data)
   gc()
   # Find variable features
