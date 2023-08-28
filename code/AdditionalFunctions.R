@@ -309,7 +309,7 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run
   options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
   
   # RNA activity estimation
-  genomic.metadata <- mcols(Annotation(s.data[['peaks']]))
+  genomic.metadata <- GenomicRanges::mcols(Annotation(s.data[['peaks']]))
   # Generate conversion table from gene_name to gene_id
   gene_name2gene_id <- as_tibble(genomic.metadata[,c("gene_name","gene_id")])
   
