@@ -343,28 +343,28 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   
   #Perform label transfer
   
-  s.data_RNA@meta.data$CellType<-s.data_RNA@meta.data$seurat_cluster
+  scRNA.data@meta.data$CellType<-scRNA.data@meta.data$seurat_cluster
   
   # Finding transfer anchors
   transfer.anchors <- FindTransferAnchors(
-    reference = s.data_RNA,
+    reference = scRNA.data,
     query = s.data,
     reduction = 'cca',
     reference.assay="RNA",
     query.assay = "Activity",
-    features = VariableFeatures(object=s.data_RNA)
+    features = VariableFeatures(object=scRNA.data)
   )
   
   predicted.labels <- TransferData(   
     anchorset = transfer.anchors,
-    refdata = s.data_RNA@meta.data$CellType,
+    refdata = scRNA.data@meta.data$CellType,
     weight.reduction = s.data[['lsi']],
     dims = 2:max.lsi.dim
   )
   
   predicted.NT.labels <- TransferData(
     anchorset = transfer.anchors,
-    refdata = s.data_RNA@meta.data$NT.type,
+    refdata = scRNA.data@meta.data$NT.type,
     weight.reduction = s.data[['lsi']],
     dims = 2:max.lsi.dim
   )
@@ -373,19 +373,19 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   s.data <- AddMetaData(s.data, metadata = predicted.labels)
   
   #Perform scRNA data imputation
-  DefaultAssay(s.data_RNA) <- "RNA"
-  refdata <- GetAssayData(s.data_RNA, assay = "RNA", slot = "data")
+  DefaultAssay(scRNA.data) <- "RNA"
+  refdata <- GetAssayData(scRNA.data, assay = "RNA", slot = "data")
   
-  s.data_RNA@meta.data$tech<-"scRNA"
+  scRNA.data@meta.data$tech<-"scRNA"
   s.data@meta.data$tech<-"scATAC"
   
   imputation <- TransferData(anchorset = transfer.anchors, refdata = refdata, weight.reduction = s.data[["lsi"]], dims = 2:max.lsi.dim)
   
   s.data[["RNA"]] <- imputation
-  coembed <- merge(x = s.data_RNA, y = s.data)
+  coembed <- merge(x = scRNA.data, y = s.data)
   
-  # Copy feature metadata from s.data_rna to s.data
-  s.data_rna.feature.metadata <- s.data_RNA[["RNA"]][[]]
+  # Copy feature metadata from scRNA.data to s.data
+  s.data_rna.feature.metadata <- scRNA.data[["RNA"]][[]]
   s.data[["RNA"]] <- AddMetaData(s.data[["RNA"]], metadata = s.data_rna.feature.metadata[rownames(s.data[["RNA"]]),"feature_symbol"], col.name = "feature_symbol")
   
   # Find variable features
