@@ -301,7 +301,7 @@ RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different
   return(obj)
 }
 
-doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run.date=run.date){
+doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run.date=run.date, max.lsi.dim){
   # RNA activity estimation
   genomic.metadata <- mcols(Annotation(s.data[['peaks']]))
   # Generate conversion table from gene_name to gene_id
