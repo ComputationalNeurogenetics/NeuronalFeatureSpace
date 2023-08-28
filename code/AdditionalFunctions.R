@@ -304,6 +304,7 @@ RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different
 doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run.date=run.date, max.lsi.dim){
   require(Seurat)
   require(Signac)
+  require(GenomicRanges)
   plan("multisession", workers = cores)
   options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
   
