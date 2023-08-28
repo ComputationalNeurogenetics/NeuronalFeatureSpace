@@ -300,3 +300,98 @@ RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different
   obj@assays$RNA_name <- RNA
   return(obj)
 }
+
+doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run.date=run.date){
+  # RNA activity estimation
+  genomic.metadata <- mcols(Annotation(s.data[['peaks']]))
+  # Generate conversion table from gene_name to gene_id
+  gene_name2gene_id <- as_tibble(genomic.metadata[,c("gene_name","gene_id")])
+  
+  # Calculate gene activity estimate from scATAC reads based on the scATAC, by using gene_names as function does not support any other id
+  gene.activities <- GeneActivity(s.data, assay="peaks")
+  
+  # Store gene_names
+  gene.names <- rownames(gene.activities)
+  
+  # Switch sparse matrix to use ensmusg id
+  ensmusg.ids <- gene_name2gene_id[match(gene.names,pull(gene_name2gene_id,"gene_name")),] %>% pull("gene_id")
+  gene_names <- gene_name2gene_id[match(gene.names,pull(gene_name2gene_id,"gene_name")),] %>% pull("gene_name")
+  
+  # Dropping NAs
+  non.na.i <- !is.na(ensmusg.ids)
+  gene.activities.gene_id <- gene.activities[non.na.i,]
+  rownames(gene.activities.gene_id) <- ensmusg.ids[non.na.i]
+  
+  # Add the gene activity matrix to the Seurat object as a new assay
+  s.data[['Activity']] <- CreateAssayObject(counts = gene.activities.gene_id)
+  s.data <- NormalizeData(
+    object = s.data,
+    assay = 'Activity',
+    normalization.method = 'LogNormalize',
+    scale.factor = median(s.data$nCount_Activity)
+  )
+  
+  # Add gene_name to gene_id mapping into the s.data[['Activity']] assays metadata
+  s.data[['Activity']]<- AddMetaData(s.data[['Activity']], col.name = "feature_symbol", metadata = gene_names[non.na.i])
+  
+  #Perform label transfer
+  
+  s.data_RNA@meta.data$CellType<-s.data_RNA@meta.data$seurat_cluster
+  
+  # Finding transfer anchors
+  transfer.anchors <- FindTransferAnchors(
+    reference = s.data_RNA,
+    query = s.data,
+    reduction = 'cca',
+    reference.assay="RNA",
+    query.assay = "Activity",
+    features = VariableFeatures(object=s.data_RNA)
+  )
+  
+  predicted.labels <- TransferData(   
+    anchorset = transfer.anchors,
+    refdata = s.data_RNA@meta.data$CellType,
+    weight.reduction = s.data[['lsi']],
+    dims = 2:max.lsi.dim
+  )
+  
+  predicted.NT.labels <- TransferData(
+    anchorset = transfer.anchors,
+    refdata = s.data_RNA@meta.data$NT.type,
+    weight.reduction = s.data[['lsi']],
+    dims = 2:max.lsi.dim
+  )
+  
+  s.data <- AddMetaData(object = s.data, metadata = apply(predicted.NT.labels,1,max), col.name ="RNA.predicted.NT")
+  s.data <- AddMetaData(s.data, metadata = predicted.labels)
+  
+  #Perform scRNA data imputation
+  DefaultAssay(s.data_RNA) <- "RNA"
+  refdata <- GetAssayData(s.data_RNA, assay = "RNA", slot = "data")
+  
+  s.data_RNA@meta.data$tech<-"scRNA"
+  s.data@meta.data$tech<-"scATAC"
+  
+  imputation <- TransferData(anchorset = transfer.anchors, refdata = refdata, weight.reduction = s.data[["lsi"]], dims = 2:max.lsi.dim)
+  
+  s.data[["RNA"]] <- imputation
+  coembed <- merge(x = s.data_RNA, y = s.data)
+  
+  # Copy feature metadata from s.data_rna to s.data
+  s.data_rna.feature.metadata <- s.data_RNA[["RNA"]][[]]
+  s.data[["RNA"]] <- AddMetaData(s.data[["RNA"]], metadata = s.data_rna.feature.metadata[rownames(s.data[["RNA"]]),"feature_symbol"], col.name = "feature_symbol")
+  
+  # Find variable features
+  coembed <- FindVariableFeatures(coembed)
+  
+  # Finally, we run PCA and UMAP on this combined object, to visualize the co-embedding of both datasets
+  coembed <- ScaleData(coembed, do.scale = FALSE)
+  coembed <- RunPCA(coembed, verbose = FALSE)
+  coembed <- RunUMAP(coembed, dims = 2:30)
+  coembed@meta.data$CellType <- ifelse(!is.na(coembed@meta.data$CellType), coembed@meta.data$CellType, coembed@meta.data$predicted.id)
+  
+  qsave(s.data, file=paste(results.path,"/E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
+  qsave(coembed, file=paste(results.path,"/E14_coembed.",run.date,".qs",sep=""), nthreads = cores)
+  return(s.data)
+}
+
