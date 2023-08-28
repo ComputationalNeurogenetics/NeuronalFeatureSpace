@@ -301,12 +301,12 @@ RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different
   return(obj)
 }
 
-doRNAintegration <- function(scATAC.data, scRNA.data, results.path, cores=1, run.date=run.date, max.lsi.dim){
+doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run.date, max.lsi.dim){
   require(Seurat)
   require(tidyverse)
   require(Signac)
   require(GenomicRanges)
-  plan("multisession", workers = cores)
+  plan("multicore")
   options(future.globals.maxSize = 150 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
   
   # RNA activity estimation
