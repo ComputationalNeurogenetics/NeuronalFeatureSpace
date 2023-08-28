@@ -301,7 +301,7 @@ RenameGenesSeurat <- function(obj, newnames) { # Replace gene names in different
   return(obj)
 }
 
-doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run.date, max.lsi.dim){
+doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run.date, max.lsi.dim,cores=12){
   require(Seurat)
   require(tidyverse)
   require(Signac)
@@ -380,14 +380,17 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   s.data@meta.data$tech<-"scATAC"
   
   imputation <- TransferData(anchorset = transfer.anchors, refdata = refdata, weight.reduction = s.data[["lsi"]], dims = 2:max.lsi.dim)
-  
   s.data[["RNA"]] <- imputation
-  coembed <- merge(x = scRNA.data, y = s.data)
   
   # Copy feature metadata from scRNA.data to s.data
   s.data_rna.feature.metadata <- scRNA.data[["RNA"]][[]]
   s.data[["RNA"]] <- AddMetaData(s.data[["RNA"]], metadata = s.data_rna.feature.metadata[rownames(s.data[["RNA"]]),"feature_symbol"], col.name = "feature_symbol")
+  qsave(s.data, file=paste(results.path,"E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
   
+  coembed <- merge(x = scRNA.data, y = s.data)
+  rm(s.data)
+  rm(scRNA.data)
+  gc()
   # Find variable features
   coembed <- FindVariableFeatures(coembed)
   
@@ -397,8 +400,7 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   coembed <- RunUMAP(coembed, dims = 2:30)
   coembed@meta.data$CellType <- ifelse(!is.na(coembed@meta.data$CellType), coembed@meta.data$CellType, coembed@meta.data$predicted.id)
   
-  qsave(s.data, file=paste(results.path,"E14_s.data.integrated.",run.date,".qs",sep=""), nthreads = cores)
   qsave(coembed, file=paste(results.path,"E14_coembed.",run.date,".qs",sep=""), nthreads = cores)
-  return(s.data)
+  return(TRUE)
 }
 
