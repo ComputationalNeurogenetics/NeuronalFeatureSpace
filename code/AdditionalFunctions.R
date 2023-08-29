@@ -497,3 +497,11 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
   
 }
 
+createDir <- function(dir){
+  if(dir.exists){
+    return(dir)
+  } else {
+    dir.create(dir)
+    return(dir)
+  }
+}
