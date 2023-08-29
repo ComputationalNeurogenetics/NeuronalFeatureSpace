@@ -390,7 +390,7 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   coembed <- merge(x = scRNA.data, y = scATAC.data)
   rm(scATAC.data)
   rm(scRNA.data)
-  gc()
+  gc() 
   # Find variable features
   coembed <- FindVariableFeatures(coembed)
   
