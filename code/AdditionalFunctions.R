@@ -501,12 +501,9 @@ doChooseRSummary<-function(results_path,resolutions){
   require(magrittr)
   require(writexl)
   require(tidyverse)
-  
-  resolutions <- c(seq(1,20,by=1))
-  results_path <- "../results_E14_040823/"
-  
   source("chooseR/pipeline.R")
-  # Create silhouette plot
+
+    # Create silhouette plot
   # Read in scores and calculate CIs
   scores <- purrr::map(
     paste0(results_path, "silhouette_grouped_", resolutions, ".rds"),
