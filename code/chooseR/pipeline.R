@@ -1,6 +1,6 @@
 # Functions used directly in the analysis and example script
 
-source("R/helper_functions.R")
+source("chooseR/helper_functions.R")
 `%>%` <- magrittr::`%>%`
 
 #' Run multiple clusters on the same Seurat Object
