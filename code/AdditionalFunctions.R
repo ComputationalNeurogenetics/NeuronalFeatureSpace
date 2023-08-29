@@ -404,3 +404,96 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   return(TRUE)
 }
 
+doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,method,algorithm,iterations){
+  require(Seurat)
+  require(writexl)
+  require(parallel)
+  require(qs)
+  `%>%` <- magrittr::`%>%`
+  source("chooseR/pipeline.R")
+  
+  #obj <- qread("../analysis/E14_scATAC_integrated.280823.qs",nthreads = 20)
+  # npcs <- 2:59
+  # resolutions <- seq(1,20,by=1)
+  # assay <- "peaks"
+  # reduction <- "lsi"
+  # results_path <- "../analysis/results_E14_280823_scATAC_leiden/"
+  
+  # Run pipeline
+  mclapply(resolutions,function(res){
+    message(paste0("Clustering ", res, "..."))
+    message("\tFinding ground truth...")
+    
+    # "Truths" will be stored at glue::glue("{reduction}.{assay}_res.{res}")
+    obj <- find_clusters(
+      obj,
+      reduction = reduction,
+      assay = assay,
+      resolution = res,
+      npcs = npcs,
+      method=method,
+      algorithm=algorithm
+    )
+    clusters <- obj[[glue::glue("{reduction}.{assay}_res.{res}")]]
+    
+    # Now perform iterative, sub-sampled clusters
+    results <- multiple_cluster(
+      obj,
+      n = iterations,
+      size = 0.8,
+      npcs = npcs,
+      res = res,
+      method=method,
+      reduction = reduction,
+      assay = assay,
+      algorithm=algorithm
+    )
+    
+    # Now calculate the co-clustering frequencies
+    message(paste0("Tallying ", res, "..."))
+    # This is the more time efficient vectorisation
+    # However, it exhausts vector memory for (nearly) all datasets
+    # matches <- purrr::map(columns, find_matches, df = results)
+    # matches <- purrr::reduce(matches, `+`)
+    columns <- colnames(dplyr::select(results, -cell))
+    mtchs <- matrix(0, nrow = dim(results)[1], ncol = dim(results)[1])
+    i <- 1 # Counter
+    for (col in columns) {
+      message(paste0("\tRound ", i, "..."))
+      mtchs <- Reduce("+", list(
+        mtchs,
+        find_matches(col, df = results)
+      ))
+      i <- i + 1
+    }
+    
+    message(paste0("Scoring ", res, "..."))
+    mtchs <- dplyr::mutate_all(
+      dplyr::as_tibble(mtchs),
+      function(x) dplyr::if_else(Re(x) > 0, percent_match(x), 0)
+    )
+    
+    # Now calculate silhouette scores
+    message(paste0("Silhouette ", res, "..."))
+    sil <- cluster::silhouette(
+      x = as.numeric(as.character(unlist(clusters))),
+      dmatrix = (1 - as.matrix(mtchs))
+    )
+    saveRDS(sil, paste0(results_path, "silhouette_", res, ".rds"))
+    
+    # Finally, calculate grouped metrics
+    message(paste0("Grouping ", res, "..."))
+    grp <- group_scores(mtchs, unlist(clusters))
+    saveRDS(grp, paste0(results_path, "frequency_grouped_", res, ".rds"))
+    sil <- group_sil(sil, res)
+    saveRDS(sil, paste0(results_path, "silhouette_grouped_", res, ".rds"))
+    
+    # Store cells per cluster table per resolution
+    saveRDS(table(Idents(obj)), paste0(results_path, "cells_per_cluster__", res, ".rds"))
+  }, mc.cores=cores)
+  
+  # Save original data, with ground truth labels
+  saveRDS(obj, paste0(results_path, "clustered_data.rds"))
+  
+}
+
