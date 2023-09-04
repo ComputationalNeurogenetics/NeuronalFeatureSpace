@@ -30,38 +30,41 @@ library(universalmotif)
 source("AdditionalFunctions.R")
 ```
 
-```{r Read E14 merged data}
-s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.071222.RNA.pos.idents.qs", nthreads = 6)
+```{r}
+run.date<-"300823"
+set.seed(2020)
+```
 
-scRNA.e14.data <- readRDS("../scRNA_data/E14scRNAseq.071222.Rds")
+
+```{r Read E14 merged data}
+s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.280823.RNA.pos.idents.qs", nthreads = 6)
+scRNA.e14.data <- readRDS("../scRNA_data/E14scRNAseq.240823.Rds")
 ```
 
 ```{r UMAP, fig.width=10, fig.height=8}
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_",run.time,".pdf",sep=""))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 DimPlot(s.data.e14, pt.size = 0.1,  label = TRUE) + coord_fixed() + NoLegend() + ggtitle("")
 dev.off()
 ```
 
 ```{r UMAP with brain regions, fig.width=10, fig.height=8}
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_brain_region_",run.time,".pdf",sep=""))
+palette <- ggsci::pal_igv()(length(unique(s.data.e14$brain_region)))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_brain_region_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
-DimPlot(s.data.e14, group.by = 'brain_region', pt.size = 0.1) + coord_fixed() + guides(fill=guide_legend(title='MY NEW TITLE')) + ggtitle("")
+DimPlot(s.data.e14, group.by = 'brain_region', pt.size = 0.1, cols=palette) + coord_fixed() + guides(fill=guide_legend(title='MY NEW TITLE')) + ggtitle("")
 dev.off()
 ```
 
 ```{r Plot NT type UMAP, fig.width=10, fig.height=8}
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_NT_type_",run.time,".pdf",sep=""))
+palette <- ggsci::pal_igv()(length(unique(s.data.e14$NT.type)))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_NT_type_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
-DimPlot(s.data.e14, group.by = 'NT.type', pt.size = 0.1) + ggtitle("") + coord_fixed()
+DimPlot(s.data.e14, group.by = 'NT.type', pt.size = 0.1, cols=palette) + ggtitle("") + coord_fixed()
 ```
 
 ```{r Plot clustering reliability, fig.width=10, fig.height=8}
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_reliability_",run.time,".pdf",sep=""))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_reliability_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 FeaturePlot(s.data.e14, features = 'silh.score', pt.size = 0.1, cols=c("orange","darkgreen")) + ggtitle("Cluster reliability") + coord_fixed()
 ```
@@ -159,8 +162,7 @@ hcd_e14 <- dendextend::set(hcd_e14,what="branches_lwd", value=8)
 ```
 
 ```{r Plot all cluster dendrogam with Circos, fig.width=24, fig.height=24}
-run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
-pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_",run.time,".pdf",sep=""))
+pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
 circos.clear()
@@ -339,8 +341,7 @@ col_fun = colorRamp2(c(min(e14.selector.exp), mean(e14.selector.exp), max(e14.se
 ```
 
 ```{r Draw GABA only circos dendrogram, fig.height=14, fig.width=14}
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_GABA_clusters_",run.time,".pdf",sep=""))
+pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_GABA_clusters_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
 circos.clear()
@@ -429,8 +430,7 @@ colnames(dacount.matrix) <- as.character(c(122,18,19,60,21))
 ```
 
 ```{r Draw clustered heatmap of pairwise DA results, fig.width=4, fig.height=4}
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 6, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/DA_features_heatmap_DI_clusters_",run.time,".pdf",sep=""))
+pdf(height = 6, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/DA_features_heatmap_DI_clusters_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
 col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("white","yellow", "red"))
@@ -490,7 +490,7 @@ create_dt(refined.18)
 # Transcriptome of DI cells
 
 ```{r Expression space of Dlx clusters}
-Dlx.GABA.e14.data <- subset(s.data.e14, idents=c(122,18,19,60))
+Dlx.GABA.e14.data <- subset(s.data.e14, idents=c(109,83,54,43))
 DefaultAssay(Dlx.GABA.e14.data) <- "RNA"
 Dlx.GABA.e14.data <- FindVariableFeatures(object = Dlx.GABA.e14.data, assay = "RNA", nfeatures = 3000)
 Dlx.exp.mat <- as.matrix(FetchData(Dlx.GABA.e14.data, vars = VariableFeatures(Dlx.GABA.e14.data)))
@@ -503,14 +503,13 @@ genes.to.i <- match(genes.to.highlight.ens,colnames(Dlx.exp.mat))
 
 col_ha <- HeatmapAnnotation(mark = anno_mark(at = genes.to.i, labels = genes.to.highlight, side="bottom",labels_gp=gpar(fontsize=20)), which = "column")
 
-row_ha <- rowAnnotation(scATAC_cluster = Idents(Dlx.GABA.e14.data), col = list(scATAC_cluster = c("18" = "red", "19" = "green", "60" = "steelblue", "122" = "orange")),annotation_name_gp= gpar(fontsize = 20), annotation_legend_param = list(title = "Cluster", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)))
+row_ha <- rowAnnotation(scATAC_cluster = Idents(Dlx.GABA.e14.data), col = list(scATAC_cluster = c("109" = "red", "83" = "green", "54" = "steelblue", "43" = "orange")),annotation_name_gp= gpar(fontsize = 20), annotation_legend_param = list(title = "Cluster", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)))
 
 # "65" = "grey", "95" = "yellow"
 
 col_fun = colorRamp2(c(0, mean(Dlx.exp.mat),max(Dlx.exp.mat)), c("blue","white", "red"))
 
-run.time <- format(Sys.time(), "%d-%m-%y")
-pdf(height = 8, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Dlx_GABA_transcriptome_",run.time,".pdf",sep=""))
+pdf(height = 8, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Dlx_GABA_transcriptome_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
 ht2 <- Heatmap(Dlx.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=4, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)), bottom_annotation = col_ha, show_column_dend = FALSE, row_title_gp=gpar(fontsize=16))
@@ -526,7 +525,7 @@ create_dt(dlx.cluster.markers.tb)
 ```
 
 ```{r Expression space of R1 clusters}
-R1.GABA.e14.data <- subset(s.data.e14, idents=c(74,91,115,53,58,57,68))
+R1.GABA.e14.data <- subset(s.data.e14, idents=c(119,60,105))
 DefaultAssay(R1.GABA.e14.data) <- "RNA"
 R1.GABA.e14.data <- FindVariableFeatures(object = R1.GABA.e14.data, assay = "RNA", nfeatures = 3000)
 R1.exp.mat <- as.matrix(FetchData(R1.GABA.e14.data, vars = VariableFeatures(R1.GABA.e14.data)))
@@ -539,12 +538,15 @@ genes.to.i <- match(genes.to.highlight.ens,colnames(R1.exp.mat))
 
 col_ha <- HeatmapAnnotation(mark = anno_mark(at = genes.to.i, labels = genes.to.highlight, side="bottom"), which = "column")
 
-row_ha <- rowAnnotation(scATAC.cluster = Idents(R1.GABA.e14.data), col = list(scATAC.cluster = c("74" = "red", "115" = "green", "91" = "steelblue", "53" = "orange","58" = "grey", "57"="purple", "68" = "yellow")))
+row_ha <- rowAnnotation(scATAC.cluster = Idents(R1.GABA.e14.data), col = list(scATAC.cluster = c("119" = "red","60" = "steelblue", "105" = "orange")))
 
 col_fun = colorRamp2(c(0, mean(R1.exp.mat),max(R1.exp.mat)), c("blue","white", "red"))
 
-Heatmap(R1.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=7, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression"), bottom_annotation = col_ha)
+pdf(height = 6, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/R1_clusters_expression_heatmap_",run.date,".pdf",sep=""))
 
+Heatmap(R1.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=3, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression"), bottom_annotation = col_ha)
+
+dev.off()
 ```
 
 ```{r DE genes between 7 R1 clusters}
@@ -556,16 +558,37 @@ create_dt(r1.cluster.markers.tb)
 # VIA part
 
 ```{r Subset GABA data for VIA}
-GABA.prog.e14.data <- subset(s.data.e14, idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(90,21,104))), reliable.clusters))
+# DI GABA only
+#c(which(nt.type.prop["GABAergic neurons",]>0.75 & brain.region.prop["di",]>0.75),c(101,24,15))
+
+#nt.type.prop["GABAergic neurons",]>0.75  &
+
+# GABA Only
+# c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(101,24,15)))
+
+GABA.prog.e14.data <- subset(s.data.e14, 
+idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75 & brain.region.prop["di",]>0.5),c(15))), reliable.clusters)
+)
 ```
 
-```{r Recalculate LSI and UMAP for DI subset}
+
+```{r Calculate proportion of stdebv covered by LSI components in comparison to 2}
 DefaultAssay(GABA.prog.e14.data) <- "peaks"
 GABA.prog.e14.data <- RunTFIDF(GABA.prog.e14.data)
 GABA.prog.e14.data <- FindTopFeatures(GABA.prog.e14.data, min.cutoff = "q0")
 GABA.prog.e14.data <- RunSVD(GABA.prog.e14.data, n = 60)
 
-GABA.prog.e14.data <-  RunUMAP(GABA.prog.e14.data,dims = 2:60, reduction = 'lsi')
+
+std.proportion <- sapply(2:length(GABA.prog.e14.data@reductions$lsi@stdev),function(x){GABA.prog.e14.data@reductions$lsi@stdev[x]/GABA.prog.e14.data@reductions$lsi@stdev[2]})
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim <- which.min(abs(std.proportion-std.aim))
+max.lsi.dim
+```
+
+
+```{r Recalculate LSI and UMAP for DI subset}
+GABA.prog.e14.data <-  RunUMAP(GABA.prog.e14.data,dims = 2:max.lsi.dim, reduction = 'lsi')
 p1 <- DimPlot(GABA.prog.e14.data, label = TRUE, pt.size=1.2, label.size = 6) + NoLegend() + coord_fixed()
 p2 <- DimPlot(GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, group.by = "NT.type") + coord_fixed()
 p3 <- DimPlot(GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, group.by = "brain_region") + coord_fixed()
@@ -591,7 +614,7 @@ GABA.prog.e14.data.markers <- FetchData(GABA.prog.e14.data, vars = marker_genes)
 
 VIA.out <- tibble(cbind(VIA.out, GABA.prog.e14.data.markers))
 
-write.table(VIA.out, file="../analysis/VIA.out.GABA.opt2.csv", sep = ",")
+write.table(VIA.out, file="../analysis/VIA.out.GABA.DI.csv", sep = ",")
 ```
 
 # ENCODE comparison
