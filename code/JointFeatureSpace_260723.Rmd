@@ -372,6 +372,15 @@ clade.peaks.e14vr1 <- readRDS("../analysis/E14_R1.021121.cladepeaks.Rds")
 
 There are 470 578 features in jointly defined feature space
 
+```{r Boxplot of feature lengths}
+pdf(height = 8, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_length_boxplot.",run.date,".pdf",sep=""))
+feature.lengths <- ranges(clade.peaks)@width
+outlier.thr <- quantile(x = feature.lengths, .75)+IQR(feature.lengths)*1.5
+boxplot(feature.lengths[feature.lengths<outlier.thr], horizontal=TRUE)
+dev.off()
+```
+
+
 ```{r Stats of features, fig.width=12}
 pdf(height = 8, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_length_histogram.",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
