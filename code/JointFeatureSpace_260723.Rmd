@@ -37,7 +37,7 @@ source("AdditionalFunctions.R")
 ```
 
 ```{r Setting multicore/multisession}
-options(parallelly.makeNodePSOCK.setup_strategy = "sequential", future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE)
+options(parallelly.makeNodePSOCK.setup_strategy = "multisession", future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE)
 plan("multisession", workers = 6)
 ```
 
@@ -370,7 +370,7 @@ clade.peaks.e14vr1 <- readRDS("../analysis/E14_R1.021121.cladepeaks.Rds")
 ```
 
 
-There are 482 157 features in jointly defined feature space
+There are 470 578 features in jointly defined feature space
 
 ```{r Stats of features, fig.width=12}
 pdf(height = 8, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_length_histogram.",run.date,".pdf",sep=""))
@@ -396,9 +396,9 @@ edb <- EnsDb.Mmusculus.v79
 seqlevelsStyle(edb) <- "UCSC"
 promoters <- getPromoters(TxDb=edb, upstream=3000, downstream=3000, by="gene")
 
-tagMatrix <- getTagMatrix(clade.peaks, windows=promoters)
+#tagMatrix <- getTagMatrix(clade.peaks, windows=promoters)
 
-plotAvgProf(tagMatrix, xlim=c(-3000, 3000), xlab="Genomic Region (5'->3')", ylab = "Read Count Frequency", conf = 0.95, resample = 1000)
+#plotAvgProf(tagMatrix, xlim=c(-3000, 3000), xlab="Genomic Region (5'->3')", ylab = "Read Count Frequency", conf = 0.95, resample = 1000)
 ```
 
 ```{r}
@@ -438,6 +438,31 @@ combined.anno <- rbind(peak.anno.act,peak.anno.rand)
 
 pdf(width = 8, height = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_stackedbarplot.",run.date,".pdf",sep=""))
 ggplot(combined.anno, aes(fill=Case, y=Frequency, x=Feature)) + 
+    geom_bar(position="dodge", stat="identity") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=20), axis.text.y = element_text(size=20)) + xlab("")
+dev.off()
+```
+
+```{r Intersect of feature space to ENCODE}
+
+overlapping <- subsetByOverlaps(feature.space, Combined.brain.E14.cCREs, minoverlap = 1L)
+
+non.overlapping <- subsetByOverlaps(feature.space, Combined.brain.E14.cCREs, minoverlap = 1L, invert = TRUE)
+
+```
+
+```{r Draw grouped barplot of feature space to ENCODE comparison, fig.height=6, fig.width=8}
+peakAnno.over <- annotatePeak(overlapping, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
+
+peakAnno.non.over <- annotatePeak(non.overlapping, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
+
+peakAnno.over.tb <- tibble(Feature=peakAnno.over@annoStat$Feature, Frequency=peakAnno.over@annoStat$Frequency, Case="Overlapping ENCODE")
+
+peakAnno.non.over.tb <- tibble(Feature=peakAnno.non.over@annoStat$Feature, Frequency=peakAnno.non.over@annoStat$Frequency, Case="Non-overlapping ENCODE")
+
+combined.anno <- rbind(peakAnno.over.tb,peakAnno.non.over.tb)
+
+pdf(width = 8, height = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Feature_space_ENCODE_stackedbarplot.",run.date,".pdf",sep=""))
+ggplot(combined.anno, aes(fill=Case, y=Frequency, x=Feature)) + 
     geom_bar(position="stack", stat="identity") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=20), axis.text.y = element_text(size=20)) + xlab("")
 dev.off()
 ```
@@ -474,8 +499,11 @@ ggplot(tibble(feat.widths=ranges(clade.peaks)@width),aes(x=feat.widths)) + geom_
 ```
 
 ```{r, fig.height=24, fig.width=24}
-pdf(file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/VENN_BRAIN_ENCODE_vs_all.",run.date,".pdf",sep=""), width = 15, height = 15)
-makeVennDiagram(Peaks=list(clade.peaks,unique(Combined.brain.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
+DefaultAssay(s.data)<-"peaks"
+feature.space <- StringToGRanges(rownames(s.data))
+
+pdf(file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/VENN_E14_BRAIN_ENCODE_vs_Feature_space.",run.date,".pdf",sep=""), width = 15, height = 15)
+makeVennDiagram(Peaks=list(feature.space,unique(Combined.brain.E14.cCREs)), NameOfPeaks = c("scATAC features","ENCODE cCREs"), minoverlap = 1)
 dev.off()
 ```
 
