@@ -73,11 +73,13 @@ FeaturePlot(s.data.e14, features = 'silh.score', pt.size = 0.1, cols=c("orange",
 ```{r Plot embryo UMAP, fig.width=10, fig.height=8}
 replicates <- str_extract(colnames(s.data.e14), pattern = "[[:alpha:]]+[:digit:]*_[:digit:]+")
 embryo <- rep("",ncol(s.data.e14))
-embryo[replicates %in% c("di_0","di_1","mb_0","mb_1","r1_1")] <- "embryo1"
-embryo[replicates %in% c("di_2","mb_2","r1_2","r1_0")] <- "embryo2"
+embryo[replicates %in% c("di_0","mb_0")] <- "6.8.20_embryo1"
+embryo[replicates %in% c("mb_0","r1_0")] <- "6.8.20_embryo2"
+embryo[replicates %in% c("di_1","mb_1","r1_1")] <- "6.10.20_embryo1"
+embryo[replicates %in% c("di_2","mb_2","r1_2")] <- "6.10.20_embryo2"
 s.data.e14 <- AddMetaData(s.data.e14, metadata = embryo, col.name = "embryo")
 
-palette <- ggsci::pal_igv()(length(unique(s.data.e14$embryo)))
+palette <- ggsci::pal_d3("category20")(length(unique(s.data.e14$embryo)))
 pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/All_clusters_UMAP_embryo_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 DimPlot(s.data.e14, group.by = 'embryo', pt.size = 0.1, cols=palette) + ggtitle("") + coord_fixed()
@@ -261,7 +263,7 @@ circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
 max_height = attr(hcd_e14, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(embryo.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(embryo.type.counts)-0.5, col=pal_d3("category20")(2))
+   circos.barplot(value=t(embryo.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(embryo.type.counts)-0.5, col=pal_d3("category20")(4))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -269,7 +271,7 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(embryo.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3()(2), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
+   Legend(at = colnames(t(embryo.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3()(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
