@@ -418,6 +418,9 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
   # assay <- "peaks"
   # reduction <- "lsi"
   # results_path <- "../analysis/results_E14_280823_scATAC_leiden/"
+  parameters <- list(npcs=npcs,cores=cores, resolutions=resolutions,assay=assay,reduction=reduction,algorithm=algorithm, method=method, results_path=results_path)
+  capture.output(parameters,file=paste(results_path,"parameters.csv",sep=""))
+  
   
   # Run pipeline
   mclapply(resolutions,function(res){
