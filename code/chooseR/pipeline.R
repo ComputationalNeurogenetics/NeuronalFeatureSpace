@@ -48,7 +48,7 @@ multiple_cluster <- function(
   # Repeated clusters
   j <- 1
   for (idx in samples) {
-    message(paste0("\tClustering ", j, "..."))
+    message_parallel(paste0("\tClustering iteration ", j, "..."))
     small_obj <- obj[, idx]
     small_obj <- find_clusters(
       small_obj,
