@@ -404,6 +404,10 @@ doRNAintegration <- function(scATAC.data, scRNA.data, results.path, run.date=run
   return(TRUE)
 }
 
+message_parallel <- function(...){
+  system(sprintf('echo "\n%s\n"', paste0(..., collapse="")))
+}
+
 doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,method,algorithm,iterations){
   require(Seurat)
   require(writexl)
@@ -424,8 +428,8 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
   
   # Run pipeline
   mclapply(resolutions,function(res){
-    message(paste0("Clustering ", res, "..."))
-    message("\tFinding ground truth...")
+    message_parallel(paste0("Clustering ", res, "..."))
+    message_parallel("\tFinding ground truth...")
     
     # "Truths" will be stored at glue::glue("{reduction}.{assay}_res.{res}")
     obj <- find_clusters(
@@ -453,7 +457,7 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
     )
     
     # Now calculate the co-clustering frequencies
-    message(paste0("Tallying ", res, "..."))
+    message_parallel(paste0("Tallying ", res, "..."))
     # This is the more time efficient vectorisation
     # However, it exhausts vector memory for (nearly) all datasets
     # matches <- purrr::map(columns, find_matches, df = results)
@@ -462,7 +466,7 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
     mtchs <- matrix(0, nrow = dim(results)[1], ncol = dim(results)[1])
     i <- 1 # Counter
     for (col in columns) {
-      message(paste0("\tRound ", i, "..."))
+      message_parallel(paste0("\tRound ", i, "..."))
       mtchs <- Reduce("+", list(
         mtchs,
         find_matches(col, df = results)
@@ -470,14 +474,14 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
       i <- i + 1
     }
     
-    message(paste0("Scoring ", res, "..."))
+    message_parallel(paste0("Scoring ", res, "..."))
     mtchs <- dplyr::mutate_all(
       dplyr::as_tibble(mtchs),
       function(x) dplyr::if_else(Re(x) > 0, percent_match(x), 0)
     )
     
     # Now calculate silhouette scores
-    message(paste0("Silhouette ", res, "..."))
+    message_parallel(paste0("Silhouette ", res, "..."))
     sil <- cluster::silhouette(
       x = as.numeric(as.character(unlist(clusters))),
       dmatrix = (1 - as.matrix(mtchs))
@@ -485,7 +489,7 @@ doChooseR <- function(obj,npcs,resolutions,assay,reduction,results_path,cores,me
     saveRDS(sil, paste0(results_path, "silhouette_", res, ".rds"))
     
     # Finally, calculate grouped metrics
-    message(paste0("Grouping ", res, "..."))
+    message_parallel(paste0("Grouping ", res, "..."))
     grp <- group_scores(mtchs, unlist(clusters))
     saveRDS(grp, paste0(results_path, "frequency_grouped_", res, ".rds"))
     sil <- group_sil(sil, res)
