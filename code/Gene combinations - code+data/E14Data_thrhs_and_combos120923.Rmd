@@ -75,6 +75,13 @@ thrh.vector[names(thrh.vector.mod)] <- thrh.vector.mod
 
 ```
 
+```{r Store data for processing at HPC}
+save(list=c("E14data","thrh.vector"), file="analysis/CombiROC_input_data_130923.Rdata")
+```
+
+```{r Read data at HPC}
+load("../analysis/CombiROC_input_data_130923.Rdata")
+```
 
 ```{r}
 combos <- mclapply(1:length(thrh.vector), function(x){
