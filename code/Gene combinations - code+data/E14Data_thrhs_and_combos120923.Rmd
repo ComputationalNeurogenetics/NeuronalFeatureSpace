@@ -80,19 +80,19 @@ save(list=c("E14data","thrh.vector"), file="analysis/CombiROC_input_data_130923.
 ```
 
 ```{r Read data at HPC}
-load("../analysis/CombiROC_input_data_130923.Rdata")
+load("../../analysis/CombiROC_input_data_130923.Rdata")
 ```
 
 ```{r}
 combos <- mclapply(1:length(thrh.vector), function(x){
  message_parallel(paste0("Cluster ", x, "..."))
   if (ncol(E14data[[x]]) < 8) {
-    combi(data = E14data[[x]], signalthr = thrh.vector[x], combithr = 2, max_length = 4)
+    combi(data = E14data[[x]], signalthr = thrh.vector[x], combithr = 2, max_length = 4, case_class="A")
   }
   else
-    combi(data = E14data[[x]], signalthr = thrh.vector[x], combithr = 3, max_length = 6)
-}, mc.cores = 3)
-saveRDS(combos,"../../analysis/combinations.Rds")
+    combi(data = E14data[[x]], signalthr = thrh.vector[x], combithr = 3, max_length = 6, case_class="A")
+}, mc.cores = 15)
+saveRDS(combos,file=paste("../../analysis/combinations.",run.date,".Rds",sep=""))
 # Name changed to combinations291122.Rds
 ```
 
