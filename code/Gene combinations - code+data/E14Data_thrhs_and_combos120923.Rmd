@@ -1,0 +1,93 @@
+---
+title: "E14Data_thresholds_combos311022"
+output: html_document
+date: '2022-11-17'
+---
+
+```{r Loading libraries}
+lapply(c("dplyr","Seurat", "tidyverse", "qs", "Signac", "combiroc", "tibble", "parallel"), library, character.only = T)
+source("DataFunctions.R")
+source("AuxFunctions 2.R")
+
+message_parallel <- function(...){
+  system(sprintf('echo "\n%s\n"', paste0(..., collapse="")))
+}
+```
+
+```{r Variables}
+run.date <- "120923"
+cores <- 6
+```
+
+```{r Load data}
+s.data = qread("../../scATAC_data/E14_DownstreamReady.080923.RNA.pos.idents.qs", nthreads = cores); #load scRNA-seq matrix
+DefaultAssay(s.data) <- 'RNA_name'
+```
+
+```{r Dimplot of the clusters to be processed, fig.width=15}
+DimPlot(s.data)
+```
+
+```{r Load markers and filter them}
+top.markers_rna <- qread("../../analysis/top25_RNA_marker.qs", nthreads = cores)
+top.markers_rna <- top.markers_rna %>% filter(logFC >= 0.75)
+top.markers_rna
+```
+
+```{r Go through clusters and find thresholds}
+E14data <- mclapply(levels(s.data$seurat_clusters), function(x)
+    {cluster.dfs(s.data, x, top.markers_rna=top.markers_rna)}, mc.cores=cores)
+```
+
+```{r Transforming data in long format for further using}
+E14data.long <- mclapply(E14data, function(x){
+  combiroc_long(data = x)
+},mc.cores=cores)
+```
+
+```{r Threshold plots for each cluster, warning=FALSE}
+thrh <- mclapply(E14data.long, function(x){
+ markers_distribution(data_long = x, signalthr_prediction = TRUE, case_class = "A", min_SE = 30, min_SP = 80)$Density_plot
+}, mc.cores=cores-5)
+```
+
+```{r Threshold full objects for each cluster, warning=FALSE}
+thrh.obj <- mclapply(E14data.long, function(x){
+ markers_distribution(data_long = x, signalthr_prediction = TRUE, case_class = "A", min_SE = 30, min_SP = 80)
+}, mc.cores=cores-5)
+```
+
+```{r}
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Combiroc_thrs_",run.date,".pdf",sep=""))
+lapply(1:length(thrh),function(th){plot(thrh[[th]]) + ggtitle(as.character(th-1))})
+dev.off()
+```
+
+
+```{r Picking automatic threshold and applying modifications}
+
+thrh.vector <- sapply(thrh.obj,function(th){th$Coord[th$Coord$Youden==max(th$Coord$Youden), 'threshold'][1]})
+names(thrh.vector) <- as.character(seq(0,length(thrh.vector)-1, by=1))
+
+thrh.vector.mod <- c("4"=2, "13"=1.2, "21"=1.1, "23"=1.1, "24"=1.5, "25"=1.1, "26"=1.1, "32"=1, "33"=1.1,"38"=1.1,"39"=1.1, "43"=1.1, "44"=1.8, "45"=1.2, "46"=1.5, "48"=1, "49"=1.5, "50"=2, "51"=1.1, "58"=1.2, "65"=1.3, "66"=1.5, "67"=1.5, "69"=1, "70"=1.2, "72"=1.1, "76"=1, "78"=1, "79"=1.1, "80"=1, "82"=1.2, "85"=1, "88"=1.2, "90"=1.2, "95"=1, "103"=1.2, "104"=1.2,"107"=1.2, "108"=1.5, "112"=1, "114"=1.1, "115"=2, "118"=1, "119"=1.2, "120"=1.2, "122"=1, "123"=1.4, "125"=1, "126"=0.8, "128"=1, "129"=1.1, "130"=1.1, "131"=1, "132"=1.1, "134"=1.5, "150"=1.1, "151"=1, "152"=2, "160"=1.1, "175"=1.1, "176"=1, "177"=1, "178"=1, "179"=1, "180"=1.2)
+
+thrh.vector[names(thrh.vector.mod)] <- thrh.vector.mod
+
+```
+
+
+```{r}
+combos <- mclapply(1:length(thrh.vector), function(x){
+ message_parallel(paste0("Cluster ", x, "..."))
+  if (ncol(E14data[[x]]) < 8) {
+    combi(data = E14data[[x]], signalthr = thrh.vector[x], combithr = 2, max_length = 4)
+  }
+  else
+    combi(data = E14data[[x]], signalthr = thrh.vector[x], combithr = 3, max_length = 6)
+}, mc.cores = 3)
+saveRDS(combos,"../../analysis/combinations.Rds")
+# Name changed to combinations291122.Rds
+```
+
+
+
