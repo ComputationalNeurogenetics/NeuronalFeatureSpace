@@ -644,3 +644,31 @@ createDir <- function(dir){
     return(dir)
   }
 }
+
+apply_cosine_similarity <- function(df){
+  cos.sim <- function(df, ix) 
+  {
+    A = df[ix[1],]
+    B = df[ix[2],]
+    return( sum(A*B)/sqrt(sum(A^2)*sum(B^2)) )
+  }   
+  n <- nrow(df) 
+  cmb <- expand.grid(i=1:n, j=1:n) 
+  C <- matrix(apply(cmb,1,function(cmb){ cos.sim(df, cmb) }),n,n)
+  C
+}
+
+pick.combo <- function(combos){
+  combos.tb <- as_tibble(combos)
+  highest.n <- max(pull(combos.tb,n_markers), na.rm = TRUE)
+  if (!highest.n==-Inf){
+    best.comb <- dplyr::filter(combos.tb, n_markers==highest.n) %>% top_n(n=1,wt=Youden)
+    best.markers <- unique(unlist(pull(best.comb, Markers) %>% str_split(pattern="-")))
+    #if (length(best.markers)>12){best.markers <- "More than 12"} else {best.markers<-paste(best.markers, collapse = ",")}
+    best.markers<-paste(best.markers, collapse = ",")
+    } else {
+      best.markers <- "Not found"
+  }
+  
+  return(best.markers)
+}
