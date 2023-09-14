@@ -31,14 +31,15 @@ source("AdditionalFunctions.R")
 ```
 
 ```{r}
-run.date<-"300823"
+run.date<-"110923"
 set.seed(2020)
+cores <- 6
 ```
 
 
 ```{r Read E14 merged data}
-s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.280823.RNA.pos.idents.qs", nthreads = 6)
-scRNA.e14.data <- readRDS("../scRNA_data/E14scRNAseq.240823.Rds")
+s.data.e14 <- qread("../scATAC_data/E14_DownstreamReady.080923.RNA.pos.idents.qs", nthreads = cores)
+scRNA.e14.data <- qread("../scRNA_data/E14_scRNAseq.080923.qs", nthreads = cores)
 ```
 
 ```{r UMAP, fig.width=10, fig.height=8}
@@ -156,14 +157,16 @@ genotype.type.prop <- apply(genotype.type.counts,1,function(x){
 ```
 
 
-```{r Calculate number of clusters with >.5 mojority in regions and NT-types}
+```{r Calculate number of clusters with >.5 majority in regions and NT-types}
 # Repeat for b in 1:3
-lapply(1:8,function(i){sum(nt.type.prop[i,]>0.55 & brain.region.prop[b,]>0.55)})
+b<-3
+lapply(1:8,function(i){sum(nt.type.prop[i,]>0.5 & brain.region.prop[b,]>0.5)})
 # and
 lapply(1:8,function(i){sum(nt.type.prop[i,]>0.5)})
 
 #And same for scRNA object
-lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.55 & brain.region.prop.scRNA[b,]>0.55)})
+b<-3
+lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.5 & brain.region.prop.scRNA[b,]>0.5)})
 # and
 lapply(1:8,function(i){sum(nt.type.prop.scRNA[i,]>0.5)})
 ```
@@ -193,12 +196,17 @@ brain.regions.per.cluster.50 <- apply(brain.region.prop,2,function(i){
 brain.regions.per.cluster.50 <- tibble(cluster=as.numeric(names(brain.regions.per.cluster.50)), "top_brain_region"=brain.regions.per.cluster.50)
 ```
 
-```{r Add 50% cluster type calls to CombiROC results}
-combiroc.tb <- readxl::read_xlsx("../analysis/CombiROC_results.xlsx")[,c(1,4)]
+```{r Process CombiROC results}
+combos <- readRDS("../analysis/ranked.combos_120923.Rds")
 
-supp.table.4 <- left_join(combiroc.tb, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50)
+combos.per.cluster <- lapply(combos, function(comb){pick.combo(comb$table)})
 
-create_dt(supp.table.4)
+supp.table <- tibble(cluster=seq(from=0,to=188,by=1), marker.comb=unlist(combos.per.cluster))
+
+supp.table.4 <- left_join(supp.table, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50)
+
+write.xlsx(supp.table.4, file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/4submission - Genome Biology/Revision_BMC/Tables/Supplementary table 4.xlsx")
+
 ```
 
 ```{r Calculate dendrogram of all clusters}
@@ -213,23 +221,25 @@ hcd_e14 <- dendextend::set(hcd_e14,what="branches_lwd", value=8)
 pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
+hcd.e14.labels <- as.character(as.numeric(labels(hcd_e14)))
+
 circos.clear()
 par(mar = rep(4,4))
 
 circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_e14))))
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:length(labels(hcd_e14))-0.5, rep(0, length(labels(hcd_e14))), labels(hcd_e14), col = labels_colors(hcd_e14),
+   circos.text(1:length(hcd.e14.labels)-0.5, rep(0, length(hcd.e14.labels)), labels(hcd_e14), col = labels_colors(hcd_e14),
                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.5)
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd_e14, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(brain.region.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(brain.region.counts)-0.5, col=pal_d3("category20")(4))
+   circos.barplot(value=t(brain.region.prop)[hcd.e14.labels,],pos=1:nrow(brain.region.counts)-0.5, col=pal_d3("category20")(4))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(nt.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(9)[-8])
+   circos.barplot(value=t(nt.type.prop)[hcd.e14.labels,],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(8))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -237,8 +247,8 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(nt.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(9)[-8], lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Neurotransmitter type", size = unit(4, "mm")),
-      Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
+   Legend(at = colnames(t(nt.type.prop)[hcd.e14.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(8), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Neurotransmitter type", size = unit(4, "mm")),
+      Legend(at = colnames(t(brain.region.prop)[hcd.e14.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm"))
      , direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
@@ -251,19 +261,21 @@ dev.off()
 pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_embryo",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
+hcd.e14.labels <- as.character(as.numeric(labels(hcd_e14)))
+
 circos.clear()
 par(mar = rep(4,4))
 
-circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_e14))))
+circos.initialize("leaf.labels", xlim = c(0, length(hcd.e14.labels)))
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:length(labels(hcd_e14))-0.5, rep(0, length(labels(hcd_e14))), labels(hcd_e14), col = labels_colors(hcd_e14),
+   circos.text(1:length(hcd.e14.labels)-0.5, rep(0, length(hcd.e14.labels)), labels(hcd_e14), col = labels_colors(hcd_e14),
                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.5)
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd_e14, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(embryo.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(embryo.type.counts)-0.5, col=pal_d3("category20")(4))
+   circos.barplot(value=t(embryo.type.prop)[hcd.e14.labels,],pos=1:nrow(embryo.type.counts)-0.5, col=pal_d3("category20")(4))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -271,7 +283,7 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(embryo.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3()(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
+   Legend(at = colnames(t(embryo.type.prop)[hcd.e14.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3()(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
@@ -283,19 +295,21 @@ dev.off()
 pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_genotype",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
+hcd.e14.labels <- as.character(as.numeric(labels(hcd_e14)))
+
 circos.clear()
 par(mar = rep(4,4))
 
-circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_e14))))
+circos.initialize("leaf.labels", xlim = c(0, length(hcd.e14.labels)))
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:length(labels(hcd_e14))-0.5, rep(0, length(labels(hcd_e14))), labels(hcd_e14), col = labels_colors(hcd_e14),
+   circos.text(1:length(hcd.e14.labels)-0.5, rep(0, length(hcd.e14.labels)), labels(hcd_e14), col = labels_colors(hcd_e14),
                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.5)
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd_e14, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(genotype.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(genotype.type.counts)-0.5, col=pal_jco()(2))
+   circos.barplot(value=t(genotype.type.prop)[hcd.e14.labels,],pos=1:nrow(genotype.type.counts)-0.5, col=pal_jco()(2))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -303,7 +317,7 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(genotype.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(2), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Genotype", size = unit(4, "mm")),direction="horizontal")
+   Legend(at = colnames(t(genotype.type.prop)[hcd.e14.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(2), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Genotype", size = unit(4, "mm")),direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
@@ -316,19 +330,21 @@ dev.off()
 pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_NT_type_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
+hcd.e14.labels <- as.character(as.numeric(labels(hcd_e14)))
+
 circos.clear()
 par(mar = rep(4,4))
 
-circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_e14))))
+circos.initialize("leaf.labels", xlim = c(0, length(hcd.e14.labels)))
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:length(labels(hcd_e14))-0.5, rep(0, length(labels(hcd_e14))), labels(hcd_e14), col = labels_colors(hcd_e14),
+   circos.text(1:length(hcd.e14.labels)-0.5, rep(0, length(hcd.e14.labels)), labels(hcd_e14), col = labels_colors(hcd_e14),
                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.5)
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd_e14, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(nt.type.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(9)[-8])
+   circos.barplot(value=t(nt.type.prop)[hcd.e14.labels,],pos=1:nrow(nt.type.counts)-0.5, col=pal_jco()(8))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -336,7 +352,7 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(nt.type.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(9)[-8], lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
+   Legend(at = colnames(t(nt.type.prop)[hcd.e14.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_jco()(8), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
@@ -347,19 +363,21 @@ dev.off()
 pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_all_clusters_brain_region_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
+hcd.e14.labels <- as.character(as.numeric(labels(hcd_e14)))
+
 circos.clear()
 par(mar = rep(4,4))
 
-circos.initialize("leaf.labels", xlim = c(0, length(labels(hcd_e14))))
+circos.initialize("leaf.labels", xlim = c(0, length(hcd.e14.labels)))
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.text(1:length(labels(hcd_e14))-0.5, rep(0, length(labels(hcd_e14))), labels(hcd_e14), col = labels_colors(hcd_e14),
+   circos.text(1:length(hcd.e14.labels)-0.5, rep(0, length(hcd.e14.labels)), labels(hcd_e14), col = labels_colors(hcd_e14),
                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=1.5)
 }, bg.border = NA, track.height = 0.15)
 max_height = attr(hcd_e14, "height")
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(brain.region.prop)[as.numeric(labels(hcd_e14)),],pos=1:nrow(brain.region.counts)-0.5, col=pal_d3("category20")(3))
+   circos.barplot(value=t(brain.region.prop)[hcd.e14.labels,],pos=1:nrow(brain.region.counts)-0.5, col=pal_d3("category20")(3))
 }, track.height =.15, bg.border = NA)
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
@@ -367,7 +385,7 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 }, track.height =.45, bg.border = NA)
 
 lgd_barplot = packLegend(
-   Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_e14)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(3), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Embryo", size = unit(4, "mm")),direction="horizontal")
+   Legend(at = colnames(t(brain.region.prop)[hcd.e14.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(3), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "NT-type", size = unit(4, "mm")),direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
@@ -493,9 +511,9 @@ dev.off()
 # GABA only
 
 ```{r Subset all GABA cells}
-reliable.clusters <- as.numeric(tibble(cluster=Idents(s.data.e14), silh=s.data.e14$silh.score) %>% group_by(cluster) %>% summarise(mean.silh=mean(silh)) %>% dplyr::filter(mean.silh > 0.5) %>% pull(cluster) %>% unique())
+reliable.clusters <- as.character(as.numeric(tibble(cluster=Idents(s.data.e14), silh=s.data.e14$silh.score) %>% group_by(cluster) %>% summarise(mean.silh=mean(silh)) %>% dplyr::filter(mean.silh > 0.5) %>% pull(cluster) %>% unique()))
 
-GABA.e14.data <- subset(s.data.e14, idents=intersect(which(nt.type.prop["GABAergic neurons",]>0.75),reliable.clusters))
+GABA.e14.data <- subset(s.data.e14, idents=intersect(names(which(nt.type.prop["GABAergic neurons",]>0.75)),reliable.clusters))
 ```
 
 ```{r GABA selector averages}
@@ -521,6 +539,8 @@ col_fun = colorRamp2(c(min(e14.selector.exp), mean(e14.selector.exp), max(e14.se
 pdf(height = 24, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Circos_GABA_clusters_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
+hcd.gaba.labels <- as.character(as.numeric(labels(hcd_gaba)))
+
 circos.clear()
 par(mar = rep(3,4))
 
@@ -540,9 +560,8 @@ circos.track(track.index = get.current.track.index(), panel.fun = function(x, y)
 
 
 circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-   circos.barplot(value=t(brain.region.prop)[as.numeric(labels(hcd_gaba)),],pos=1:nrow(brain.region.counts[as.numeric(labels(hcd_gaba)),])-0.5, col=pal_d3("category20")(4))
+   circos.barplot(value=t(brain.region.prop)[hcd.gaba.labels,],pos=1:nrow(brain.region.counts[hcd.gaba.labels,])-0.5, col=pal_d3("category20")(4))
 }, track.height =.08, bg.border = NA)
-
 
 circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
    circos.dendrogram(hcd_gaba, max_height = max_height)
@@ -550,9 +569,8 @@ circos.track(ylim = c(0, max_height), panel.fun = function(x, y) {
 
 
 lgd_barplot = packLegend(
-       Legend(at = colnames(t(brain.region.prop)[as.numeric(labels(hcd_gaba)),]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm")),
-       Legend(title = "Marker expression", col_fun = col_fun,title_gp = gpar(cex = 2), labels_gp = gpar(fontsize=16))
-     , direction="horizontal")
+       Legend(at = colnames(t(brain.region.prop)[hcd.gaba.labels,]), type = "lines",labels_gp = gpar(col = "black", cex = 2.5), legend_gp = gpar(col=pal_d3("category20")(4), lwd = 8), title_position = "topleft", title_gp = gpar(cex = 2), title = "Brain region", size = unit(4, "mm")),
+       Legend(title = "Marker expression", col_fun = col_fun,title_gp = gpar(cex = 2), labels_gp = gpar(fontsize=16)),direction="horizontal")
 
 draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom"))
 
@@ -667,9 +685,9 @@ create_dt(refined.18)
 # Transcriptome of DI cells
 
 ```{r Expression space of Dlx clusters}
-Dlx.GABA.e14.data <- subset(s.data.e14, idents=c(109,83,54,43))
+Dlx.GABA.e14.data <- subset(s.data.e14, idents=as.character(c(104,179,140,136,3,45)))
 DefaultAssay(Dlx.GABA.e14.data) <- "RNA"
-Dlx.GABA.e14.data <- FindVariableFeatures(object = Dlx.GABA.e14.data, assay = "RNA", nfeatures = 3000)
+Dlx.GABA.e14.data <- FindVariableFeatures(object = Dlx.GABA.e14.data, assay = "RNA", nfeatures = 1400)
 Dlx.exp.mat <- as.matrix(FetchData(Dlx.GABA.e14.data, vars = VariableFeatures(Dlx.GABA.e14.data)))
 ```
 
@@ -680,7 +698,7 @@ genes.to.i <- match(genes.to.highlight.ens,colnames(Dlx.exp.mat))
 
 col_ha <- HeatmapAnnotation(mark = anno_mark(at = genes.to.i, labels = genes.to.highlight, side="bottom",labels_gp=gpar(fontsize=20)), which = "column")
 
-row_ha <- rowAnnotation(scATAC_cluster = Idents(Dlx.GABA.e14.data), col = list(scATAC_cluster = c("109" = "red", "83" = "green", "54" = "steelblue", "43" = "orange")),annotation_name_gp= gpar(fontsize = 20), annotation_legend_param = list(title = "Cluster", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)))
+row_ha <- rowAnnotation(scATAC_cluster = Idents(Dlx.GABA.e14.data), col = list(scATAC_cluster = c("104" = "red", "179" = "green", "140" = "steelblue", "136" = "orange", "3"="yellow", "45"="purple")),annotation_name_gp= gpar(fontsize = 20), annotation_legend_param = list(title = "Cluster", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)))
 
 # "65" = "grey", "95" = "yellow"
 
@@ -689,7 +707,7 @@ col_fun = colorRamp2(c(0, mean(Dlx.exp.mat),max(Dlx.exp.mat)), c("blue","white",
 pdf(height = 8, width = 24, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Dlx_GABA_transcriptome_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
-ht2 <- Heatmap(Dlx.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=4, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)), bottom_annotation = col_ha, show_column_dend = FALSE, row_title_gp=gpar(fontsize=16))
+ht2 <- Heatmap(Dlx.exp.mat, col=col_fun, show_row_names = FALSE, show_column_names = FALSE, right_annotation = row_ha, split=6, clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", clustering_distance_columns = "euclidean", clustering_method_columns = "ward.D2", heatmap_legend_param = list(title = "Expression", labels_gp=gpar(fontsize=16), title_gp = gpar(fontsize=16)), bottom_annotation = col_ha, show_column_dend = FALSE, row_title_gp=gpar(fontsize=16))
 
 draw(ht2)
 dev.off()
@@ -735,19 +753,11 @@ r1.cluster.markers.tb <- as_tibble(r1.cluster.markers) %>% dplyr::filter((avg_lo
 create_dt(r1.cluster.markers.tb)
 ```
 
-# VIA part
+# VIA DI GABA
 
-```{r Subset GABA data for VIA}
-# DI GABA only
-#c(which(nt.type.prop["GABAergic neurons",]>0.75 & brain.region.prop["di",]>0.75),c(101,24,15))
-
-#nt.type.prop["GABAergic neurons",]>0.75  &
-
-# GABA Only
-# c(c(which(nt.type.prop["GABAergic neurons",]>0.75),c(101,24,15)))
-
+```{r Subset DI GABA data for VIA}
 GABA.prog.e14.data <- subset(s.data.e14, 
-idents= intersect(c(c(which(nt.type.prop["GABAergic neurons",]>0.75 & brain.region.prop["di",]>0.5),c(15))), reliable.clusters)
+idents= intersect(c(names(which(nt.type.prop["GABAergic neurons",]>0.75 & brain.region.prop["di",]>0.5)),c(1,80,48,150)), reliable.clusters)
 )
 ```
 
@@ -786,15 +796,71 @@ cholinergic <- c("Phox2b","Isl1","Chat","Slc18a3")
 dopaminergic <- c("Foxa1","Ddc","Th","Slc18a2")
 serotonergic <- c("Pitx3", "Lmx1a","Fev","Tph2","Slc6a4")
 adrenergic <- c("En1", "Phox2a","Dbh")
+additional <- c("Six3","Lhx6","Lhx8","Foxg1","Npy","Sst","Nkx2-1","Dlx5","Dlx3")
 
-marker_genes <- unique(c(progenitor.patterning,GABAergic, GABA.precursor.fate, glutamatergic, cholinergic, dopaminergic, serotonergic, adrenergic))
+marker_genes <- unique(c(progenitor.patterning,GABAergic, GABA.precursor.fate, glutamatergic, cholinergic, dopaminergic, serotonergic, adrenergic,additional))
 
 DefaultAssay(GABA.prog.e14.data) <- "RNA_name"
 GABA.prog.e14.data.markers <- FetchData(GABA.prog.e14.data, vars = marker_genes)
 
 VIA.out <- tibble(cbind(VIA.out, GABA.prog.e14.data.markers))
 
-write.table(VIA.out, file="../analysis/VIA.out.GABA.DI.csv", sep = ",")
+write.table(VIA.out, file="../analysis/VIA.out.GABA.DI.110923.csv", sep = ",")
+```
+
+# VIA R1 GABA
+
+```{r Subset R1 GABA data for VIA}
+R1.GABA.prog.e14.data <- subset(s.data.e14, 
+idents= intersect(c(c(names(which(nt.type.prop["GABAergic neurons",]>0.75 & brain.region.prop["r1",]>0.5))),55), reliable.clusters)
+)
+```
+
+
+```{r Calculate proportion of stdebv covered by LSI components in comparison to 2 for R1 subset}
+DefaultAssay(R1.GABA.prog.e14.data) <- "peaks"
+R1.GABA.prog.e14.data <- RunTFIDF(R1.GABA.prog.e14.data)
+R1.GABA.prog.e14.data <- FindTopFeatures(R1.GABA.prog.e14.data, min.cutoff = "q0")
+R1.GABA.prog.e14.data <- RunSVD(R1.GABA.prog.e14.data, n = 60)
+
+
+std.proportion <- sapply(2:length(R1.GABA.prog.e14.data@reductions$lsi@stdev),function(x){R1.GABA.prog.e14.data@reductions$lsi@stdev[x]/R1.GABA.prog.e14.data@reductions$lsi@stdev[2]})
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim <- which.min(abs(std.proportion-std.aim))
+max.lsi.dim
+```
+
+
+```{r Recalculate LSI and UMAP for R1 subset}
+R1.GABA.prog.e14.data <-  RunUMAP(R1.GABA.prog.e14.data,dims = 2:max.lsi.dim, reduction = 'lsi')
+p1 <- DimPlot(R1.GABA.prog.e14.data, label = TRUE, pt.size=1.2, label.size = 6) + NoLegend() + coord_fixed()
+p2 <- DimPlot(R1.GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, group.by = "NT.type") + coord_fixed()
+p3 <- DimPlot(R1.GABA.prog.e14.data, label = FALSE, pt.size=1.2, label.size = 6, group.by = "brain_region") + coord_fixed()
+cowplot::plot_grid(p1,p2,p3)
+```
+
+```{r Write out R1 UMAP coordinates for VIA}
+VIA.out <- cbind(tibble(barcode=colnames(R1.GABA.prog.e14.data),label = as.character(Idents(R1.GABA.prog.e14.data)), UMAP_1 = R1.GABA.prog.e14.data@reductions$umap@cell.embeddings[,1], UMAP_2 = R1.GABA.prog.e14.data@reductions$umap@cell.embeddings[,2]),as_tibble(R1.GABA.prog.e14.data@reductions$lsi@cell.embeddings))
+
+progenitor.patterning <- c("Sox2","Nkx2-1","Nkx2-2", "Nkx6-1", "Otx2")
+GABAergic <- c("Sox21","Ascl1","Gad1","Gad2", "Slc32a1","Foxp1","Zfpm1")
+GABA.precursor.fate <- c("Helt","Gata2","Gata3","Tal1","Lhx6","Dlx1","Dlx2","Arx")
+glutamatergic <- c("Neurog2","Pou4f1","Gls","Slc17a6")
+cholinergic <- c("Phox2b","Isl1","Chat","Slc18a3")
+dopaminergic <- c("Foxa1","Ddc","Th","Slc18a2")
+serotonergic <- c("Pitx3", "Lmx1a","Fev","Tph2","Slc6a4")
+adrenergic <- c("En1", "Phox2a","Dbh")
+additional <- c("Six3","Lhx6","Lhx8","Foxg1","Npy","Sst","Nkx2-1","Pax7","Hoxb1")
+
+marker_genes <- unique(c(progenitor.patterning,GABAergic, GABA.precursor.fate, glutamatergic, cholinergic, dopaminergic, serotonergic, adrenergic,additional))
+
+DefaultAssay(R1.GABA.prog.e14.data) <- "RNA_name"
+GABA.prog.e14.data.markers <- FetchData(R1.GABA.prog.e14.data, vars = marker_genes)
+
+VIA.out <- tibble(cbind(VIA.out, GABA.prog.e14.data.markers))
+
+write.table(VIA.out, file="../analysis/VIA.out.GABA.R1.120923.csv", sep = ",")
 ```
 
 # ENCODE comparison
