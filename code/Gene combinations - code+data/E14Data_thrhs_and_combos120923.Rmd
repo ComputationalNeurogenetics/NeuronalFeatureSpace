@@ -96,5 +96,9 @@ saveRDS(combos,file=paste("../../analysis/combinations.",run.date,".Rds",sep="")
 # Name changed to combinations291122.Rds
 ```
 
+```{r}
+ranked.combos <- lapply(1:length(combos), function(comb){ranked_combs(combo_table = combos[[comb]], min_SE=95, min_SP = 95)})
+saveRDS(ranked.combos, file="../../analysis/ranked.combos_120923.Rds")
+```
 
 
