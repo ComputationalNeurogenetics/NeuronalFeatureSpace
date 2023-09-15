@@ -198,15 +198,15 @@ brain.regions.per.cluster.50 <- tibble(cluster=as.numeric(names(brain.regions.pe
 
 ```{r Process CombiROC results}
 combos <- readRDS("../analysis/ranked.combos_120923.Rds")
-
 combos.per.cluster <- lapply(combos, function(comb){pick.combo(comb$table)})
+
+reliability.per.cluster <- tibble(cluster=as.numeric(as.character(Idents(s.data.e14))), silh=s.data.e14$silh.score) %>% group_by(cluster) %>% summarise(mean.silh=mean(silh))
 
 supp.table <- tibble(cluster=seq(from=0,to=188,by=1), marker.comb=unlist(combos.per.cluster))
 
-supp.table.4 <- left_join(supp.table, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50)
+supp.table.4 <- left_join(supp.table, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50) %>% left_join(reliability.per.cluster)
 
-write.xlsx(supp.table.4, file="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/4submission - Genome Biology/Revision_BMC/Tables/Supplementary table 4.xlsx")
-
+writexl::write_xlsx(supp.table.4, path="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/4submission - Genome Biology/Revision_BMC/Tables/Supplementary table 4.xlsx")
 ```
 
 ```{r Calculate dendrogram of all clusters}
@@ -580,10 +580,27 @@ dev.off()
 
 ```{r Look at DA features between specific clusters}
 # Read results
-da_features <- qread("../scATAC_data/da_features_8.qs", nthreads = 6)
+#da_features <- qread("../analysis/da_results/da_counts_40.qs", nthreads = 6)
+da_features <- lapply(list.files("../analysis/da_results/"),function(da_file){tmp<-qread(paste("../analysis/da_results/",da_file,sep=""),nthreads = 6)
+names(tmp) <- c(readRDS("../analysis/GABA.clusters.Rds"), "80","48","150")
+return(tmp)
+})
 
-da_bp_di_gaba <- lapply(da_features[c(122,18,19,60)],function(da.1){
-  lapply(da.1[c(122,18,19,60)], function(da.2){
+da_order <- str_remove(str_remove(list.files("../analysis/da_results/"), pattern = "da_counts_"),pattern = ".qs")
+
+names(da_features) <- da_order
+
+DI.clusters.to.plot <- as.character(c(3,45,104,136,140,179,48,80))
+
+P3.branch <- as.character(c(80,150,48,104,179,45,136,3))
+MGE.branch <-  as.character(c(80,150,48,104,179,45,140))
+
+#TODO: Fix the names, da_features don't have all elements and not necessarily in order neither, thus all subsequent indexing operations fail
+
+da_bp_di_gaba <- lapply(MGE.branch,function(da.1.name){
+  da.1 <- da_features[[da.1.name]]
+  lapply(MGE.branch, function(da.2.name){
+    da.2 <- da.1[[da.2.name]]
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
       
@@ -599,13 +616,15 @@ da_bp_di_gaba <- lapply(da_features[c(122,18,19,60)],function(da.1){
 })
 
 dalength.matrix <- sapply(da_bp_di_gaba, unlist)/1000
-rownames(dalength.matrix) <- as.character(c(122,18,19,60))
-colnames(dalength.matrix) <- as.character(c(122,18,19,60))
+rownames(dalength.matrix) <- MGE.branch
+colnames(dalength.matrix) <-MGE.branch
 ```
 
 ```{r Pairwise chromatin DA count}
-da_count <- lapply(da_features[c(122,18,19,60,21)],function(da.1){
-  lapply(da.1[c(122,18,19,60,21)], function(da.2){
+da_count <- lapply(DI.clusters.to.plot,function(da.1.name){
+  da.1 <- da_features[[da.1.name]]
+  lapply(DI.clusters.to.plot, function(da.2.name){
+    da.2 <- da.1[[da.2.name]]
     if (is_tibble(da.2)){
       filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
       if (length(filt.da)>0){
@@ -620,12 +639,12 @@ da_count <- lapply(da_features[c(122,18,19,60,21)],function(da.1){
 })
 
 dacount.matrix <- sapply(da_count, unlist)
-rownames(dacount.matrix) <- as.character(c(122,18,19,60,21))
-colnames(dacount.matrix) <- as.character(c(122,18,19,60,21))
+rownames(dacount.matrix) <- DI.clusters.to.plot
+colnames(dacount.matrix) <- DI.clusters.to.plot
 ```
 
 ```{r Draw clustered heatmap of pairwise DA results, fig.width=4, fig.height=4}
-pdf(height = 6, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/DA_features_heatmap_DI_clusters_",run.date,".pdf",sep=""))
+pdf(height = 6, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/DA_features_heatmap_MGE_clusters_",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 
 col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("white","yellow", "red"))
@@ -634,8 +653,8 @@ Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_heigh
 ```
 
 ```{r Draw closest gene circoses for cluster pairs,fig.height=15, fig.width=15}
-id.1 <- 19
-id.2 <- 122
+id.1 <- "45"
+id.2 <- "3"
 
 DefaultAssay(s.data.e14) <- "peaks"
 
@@ -662,25 +681,47 @@ draw(lgd_barplot, x = unit(2, "cm"), y = unit(2, "cm"), just = c("left", "bottom
 circos.clear()
 ```
 
-```{r GeneOntology test for closest genes 122}
-clust.122 <- data.frame(genes=dplyr::filter(dat.1, color=="blue") %>%  pull(label),cat=1)
+```{r GeneOntology test for closest genes 45}
+clust.45 <- data.frame(genes=dplyr::filter(dat.1, color=="red") %>%  pull(label),cat=1)
 
-Go_Enrich_Out<- go_enrich(clust.122,organismDb='Mus.musculus')
+Go_Enrich_Out<- go_enrich(clust.45,organismDb='Mus.musculus')
 
-refined.122 = as_tibble(refine(Go_Enrich_Out, fwer=0.25)) %>% dplyr::filter(signif==TRUE)
+refined.45 = as_tibble(refine(Go_Enrich_Out, fwer=0.25)) %>% dplyr::filter(signif==TRUE)
 
-create_dt(refined.122)
+create_dt(refined.45)
 ```
 
-```{r GeneOntology test for closest genes 18}
-clust.18 <- data.frame(genes=dplyr::filter(dat.1, color=="blue") %>%  pull(label),cat=1)
+```{r GeneOntology test for closest genes 140}
+clust.140 <- data.frame(genes=dplyr::filter(dat.1, color=="blue") %>%  pull(label),cat=1)
 
-Go_Enrich_Out<- go_enrich(clust.18,organismDb='Mus.musculus')
+Go_Enrich_Out<- go_enrich(clust.140,organismDb='Mus.musculus')
 
-refined.18 = as_tibble(refine(Go_Enrich_Out, fwer=0.25)) %>% dplyr::filter(signif==TRUE)
+refined.140 = as_tibble(refine(Go_Enrich_Out, fwer=0.25)) %>% dplyr::filter(signif==TRUE)
 
-create_dt(refined.18)
+create_dt(refined.140)
 ```
+
+
+```{r GeneOntology test for closest genes 3}
+clust.3 <- data.frame(genes=dplyr::filter(dat.1, color=="blue") %>%  pull(label),cat=1)
+
+Go_Enrich_Out<- go_enrich(clust.3,organismDb='Mus.musculus')
+
+refined.3 = as_tibble(refine(Go_Enrich_Out, fwer=0.25)) %>% dplyr::filter(signif==TRUE)
+
+create_dt(refined.3)
+```
+
+# Accessibility heatmap
+
+```{r Accessibility heatmap}
+DefaultAssay(s.data.e14) <- "peaks"
+# TODO: WRite generic function to AdditionalFunctions.R
+
+
+
+```
+
 
 # Transcriptome of DI cells
 
