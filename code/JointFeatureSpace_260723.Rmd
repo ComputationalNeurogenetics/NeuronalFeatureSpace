@@ -410,7 +410,7 @@ promoters <- getPromoters(TxDb=edb, upstream=3000, downstream=3000, by="gene")
 #plotAvgProf(tagMatrix, xlim=c(-3000, 3000), xlab="Genomic Region (5'->3')", ylab = "Read Count Frequency", conf = 0.95, resample = 1000)
 ```
 
-```{r}
+```{r Calculcate average.feature.loc.gene for clade.peaks}
 average.feature.loc.gene <- plotPeakProf2(peak = clade.peaks, upstream = rel(0.25), downstream = rel(0.25),
               conf = 0.95, by = "gene", type = "body", nbin = 250,
               TxDb = edb, ignore_strand = F, free_y=FALSE)
@@ -450,6 +450,20 @@ ggplot(combined.anno, aes(fill=Case, y=Frequency, x=Feature)) +
     geom_bar(position="dodge", stat="identity") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=20), axis.text.y = element_text(size=20)) + xlab("")
 dev.off()
 ```
+
+```{r Statistical calculation for Supp Table 1}
+
+total.feature.count <- length(clade.peaks)
+
+fishers <- lapply(1:11,function(i){
+  clade.tmp <- ((peakAnno.edb@annoStat[i,]$Frequency)/100)*total.feature.count
+  random.tmp <- ((peakAnno.rand.edb@annoStat[i,]$Frequency)/100)*total.feature.count
+  return(fisher.test(as.table(matrix(c(random.tmp,total.feature.count-random.tmp,clade.tmp, total.feature.count-clade.tmp),nrow=2,ncol=2))))
+})
+names(fishers) <- peakAnno.edb@annoStat[,1]
+fishers
+```
+
 
 ```{r Intersect of feature space to ENCODE}
 
