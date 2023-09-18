@@ -672,3 +672,65 @@ pick.combo <- function(combos){
   
   return(best.markers)
 }
+
+getGeneRange <- function(s.data, gene_name, range){
+  DefaultAssay(s.data) <- "peaks"
+  gene.coords <- range(Annotation(s.data)[Annotation(s.data)$gene_name %in% gene_name], ignore.strand = TRUE)
+  range.start <- start(gene.coords)
+  range.end <- end(gene.coords)
+  range.width <- 2 * range
+  chr <- as.character(seqnames(gene.coords)@values) %>% str_remove(pattern = "[:lower:]{3}")
+  interval.range <- construct_range(chr, range.start, range.end, range.width)
+  return(interval.range)
+}
+
+construct_range <- function(chr,gene.start,gene.end, width){
+  return(paste("chr",chr,"-",gene.start-width,"-",gene.end+width,sep=""))
+}
+
+plotAccHeatmap <- function(s.data, gene.to.plot, range.to.plot,scale=FALSE, clusters.to.plot, row.split.km=FALSE, km.stats=FALSE){
+  require(Seurat)
+  require(GenomicRanges)
+  require(cluster)
+  
+  DefaultAssay(s.data) <- "peaks"
+  all.features <- StringToGRanges(rownames(s.data))
+  
+  gene.range <- StringToGRanges(getGeneRange(s.data = s.data, gene_name = gene.to.plot, range = range.to.plot))
+  features.to.plot.in <- which(all.features %over% gene.range)
+  
+  acc.data <- subset(s.data, idents=clusters.to.plot, features=rownames(s.data)[features.to.plot.in]
+  )
+  
+  DefaultAssay(s.data) <- "RNA_name"
+  exp.data <- subset(s.data, idents=clusters.to.plot, features=gene.to.plot)
+  
+  acc.data.avg <- AverageExpression(acc.data)
+  exp.data.avg <- AverageExpression(exp.data)
+  
+  if (scale){
+    acc.data.avg$peaks <- t(scale(t(acc.data.avg$peaks)))
+  }
+  
+  if (km.stats){
+    
+    sil_width <- map_dbl(2:row.split.km,  function(k){
+      model <- pam(x = t(acc.data.avg$peaks), k = k)
+      model$silinfo$avg.width
+    })
+    
+    sil_df <- data.frame(
+      k = 2:row.split.km,
+      sil_width = sil_width
+    )
+    row.split.km <- sil_df[which.max(sil_df[,"sil_width"]),"k"]
+  }
+  
+  row_ha = rowAnnotation(expression = anno_barplot(as.numeric(exp.data.avg$RNA_name)), annotation_name_rot = 45, annotation_name_side="top")
+  
+  col_fun = colorRamp2(c(0,  max(acc.data.avg$peaks)), c("white", "darkgreen"))
+  acc.heatmap <- Heatmap(t(acc.data.avg$peaks), col = col_fun, cluster_columns = FALSE, name=ifelse(scale,"Feature scaled accessibility","Accessibility"), column_title = paste("Features in and +-",range.to.plot/1000,"kbp around ",gene.to.plot,sep=""), row_title = "Cell clusters",  clustering_distance_rows = "euclidean", clustering_method_rows = "ward.D2", row_km = row.split.km, border = TRUE, right_annotation = row_ha)
+  
+  return(acc.heatmap)
+  
+}
