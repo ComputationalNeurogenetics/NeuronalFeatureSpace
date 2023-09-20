@@ -688,7 +688,7 @@ construct_range <- function(chr,gene.start,gene.end, width){
   return(paste("chr",chr,"-",gene.start-width,"-",gene.end+width,sep=""))
 }
 
-plotAccHeatmap <- function(s.data, gene.to.plot, range.to.plot,scale=FALSE, clusters.to.plot, row.split.km=FALSE, km.stats=FALSE){
+plotAccHeatmap <- function(s.data, gene.to.plot, range.to.plot,scale=FALSE, clusters.to.plot, row.split.km=FALSE, km.stats=FALSE, brain.reg=FALSE){
   require(Seurat)
   require(GenomicRanges)
   require(cluster)
@@ -724,6 +724,11 @@ plotAccHeatmap <- function(s.data, gene.to.plot, range.to.plot,scale=FALSE, clus
       sil_width = sil_width
     )
     row.split.km <- sil_df[which.max(sil_df[,"sil_width"]),"k"]
+  }
+  
+  if (is_tibble(brain.reg)){
+    dominant.region <- brain.reg$top_brain_region[match(clusters.to.plot,as.character(brain.reg$cluster))]
+    colnames(acc.data.avg$peaks) <- paste(colnames(acc.data.avg$peaks)," (",dominant.region,")",sep="")
   }
   
   row_ha = rowAnnotation(expression = anno_barplot(as.numeric(exp.data.avg$RNA_name)), annotation_name_rot = 45, annotation_name_side="top")

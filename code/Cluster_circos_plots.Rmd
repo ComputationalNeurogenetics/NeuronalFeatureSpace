@@ -718,26 +718,27 @@ create_dt(refined.3)
 ```{r Draw accessibility heatmap Gad1, fig.width=18, fig.height=10}
 clusters.to.plot <- intersect(c(names(which(nt.type.prop["GABAergic neurons",]>0.75))), reliable.clusters)
 
-acc.heatmap<-plotAccHeatmap(s.data=s.data.e14, gene.to.plot="Gad1", range.to.plot=50000, clusters.to.plot=clusters.to.plot, row.split.km=4, km.stats=TRUE,scale=TRUE)
+acc.heatmap<-plotAccHeatmap(s.data=s.data.e14, gene.to.plot="Gad1", range.to.plot=50000, clusters.to.plot=clusters.to.plot, row.split.km=4, km.stats=TRUE,scale=TRUE, brain.reg = brain.regions.per.cluster.50)
 
-pdf(height = 10, width = 14, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Gad1_accessibility_heatmap_",run.date,".pdf",sep=""))
+pdf(height = 12, width = 14, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Gad1_accessibility_heatmap_",run.date,".pdf",sep=""))
 acc.heatmap
 ```
 
 ```{r Draw accessibility heatmap Gad2, fig.width=18, fig.height=10}
 clusters.to.plot <- intersect(c(names(which(nt.type.prop["GABAergic neurons",]>0.75))), reliable.clusters)
 
-acc.heatmap<-plotAccHeatmap(s.data=s.data.e14, gene.to.plot="Gad2", range.to.plot=50000, clusters.to.plot=clusters.to.plot,row.split.km=4, km.stats=TRUE, scale=TRUE)
+acc.heatmap<-plotAccHeatmap(s.data=s.data.e14, gene.to.plot="Gad2", range.to.plot=50000, clusters.to.plot=clusters.to.plot,row.split.km=4, km.stats=TRUE, scale=TRUE, brain.reg = brain.regions.per.cluster.50)
 
-pdf(height = 10, width = 14, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Gad2_accessibility_heatmap_",run.date,".pdf",sep=""))
+pdf(height = 12, width = 14, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Gad2_accessibility_heatmap_",run.date,".pdf",sep=""))
 acc.heatmap
 ```
 
 ```{r Draw accessibility heatmap Slc32a1, fig.width=18, fig.height=10}
 clusters.to.plot <- intersect(c(names(which(nt.type.prop["GABAergic neurons",]>0.75))), reliable.clusters)
 
-acc.heatmap<-plotAccHeatmap(s.data=s.data.e14, gene.to.plot="Slc32a1", range.to.plot=50000, clusters.to.plot=clusters.to.plot, row.split.km=4, km.stats=TRUE,scale=TRUE)
-pdf(height = 10, width = 14, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Slc32a1_accessibility_heatmap_",run.date,".pdf",sep=""))
+acc.heatmap<-plotAccHeatmap(s.data=s.data.e14, gene.to.plot="Slc32a1", range.to.plot=50000, clusters.to.plot=clusters.to.plot, row.split.km=4, km.stats=TRUE,scale=TRUE, brain.reg = brain.regions.per.cluster.50)
+
+pdf(height = 12, width = 14, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Slc32a1_accessibility_heatmap_",run.date,".pdf",sep=""))
 acc.heatmap
 dev.off()
 ```
