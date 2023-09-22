@@ -1,0 +1,133 @@
+---
+title: "R Notebook of E14MB merge binned step"
+output: html_notebook
+---
+
+```{r Packages}
+library(tidyverse)
+library(Signac)
+```
+
+```{r Setting variables}
+options(parallelly.makeNodePSOCK.setup_strategy = "multisession", future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE)
+
+sample.name <- "E14vMB1"
+run.date <- format(Sys.time(), "%d%m%y")
+raw.path <- "/Volumes/VarastoPool/University_research_data/Data/e14vmb1_data/scATAC/"
+```
+
+```{r Reading cell definition files}
+repl0.0.singlecell <- read_csv(file = paste(raw.path,sample.name,"_0/outs/singlecell.csv", sep=""), show_col_types = FALSE)
+repl1.1.singlecell <- read_csv(file = paste(raw.path,sample.name,"_1/outs/singlecell.csv", sep=""), show_col_types = FALSE)
+repl2.2.singlecell <- read_csv(file = paste(raw.path,sample.name,"_2/outs/singlecell.csv", sep=""), show_col_types = FALSE)
+```
+
+```{r Subset actual cells}
+repl0.cells <- dplyr::filter(repl0.0.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+repl1.cells <- dplyr::filter(repl1.1.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+repl2.cells <- dplyr::filter(repl2.2.singlecell, is__cell_barcode == 1) %>% pull(barcode)
+```
+
+```{r Create filtered fragments file repl0}
+FilterCells(
+  fragments = paste(raw.path,sample.name,"_0/outs/fragments.tsv.gz", sep=""),
+  cells = repl0.cells,
+  outfile = paste(raw.path,sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+```
+
+```{r Create filtered fragments file repl1}
+FilterCells(
+  fragments = paste(raw.path,sample.name,"_1/outs/fragments.tsv.gz", sep=""),
+  cells = repl1.cells,
+  outfile = paste(raw.path,sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+```
+
+```{r Create filtered fragments file repl2}
+FilterCells(
+  fragments = paste(raw.path,sample.name,"_2/outs/fragments.tsv.gz", sep=""),
+  cells = repl2.cells,
+  outfile = paste(raw.path,sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""),
+  buffer_length = 256L,
+  verbose = TRUE
+)
+```
+
+```{r Creating fragment objects}
+repl0.fragments <- CreateFragmentObject(path = paste(raw.path,sample.name,"_0/outs/fragments.filtered.tsv.gz", sep=""), cells = repl0.cells, validate.fragments = FALSE)
+
+repl1.fragments <- CreateFragmentObject(path = paste(raw.path,sample.name,"_1/outs/fragments.filtered.tsv.gz", sep=""), cells = repl1.cells, validate.fragments = FALSE)
+
+repl2.fragments <- CreateFragmentObject(path = paste(raw.path,sample.name,"_2/outs/fragments.filtered.tsv.gz", sep=""), cells = repl2.cells, validate.fragments = FALSE)
+```
+
+```{r Setting used chromosomes}
+used.chromosomes <- c("chr1", "chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19")
+genome.lengths <- seqlengths(BSgenome.Mmusculus.UCSC.mm10)[names(seqlengths(BSgenome.Mmusculus.UCSC.mm10)) %in% used.chromosomes]
+```
+
+```{r Extracting reads overlapping genomic bins}
+repl0.feature.matrix <- GenomeBinMatrix(fragments = list(repl0.fragments), binsize = 5000, genome = genome.lengths, process_n = 5000)
+
+repl1.feature.matrix <- GenomeBinMatrix(fragments = list(repl1.fragments), binsize = 5000, genome = genome.lengths, process_n = 5000)
+
+repl2.feature.matrix <- GenomeBinMatrix(fragments = list(repl2.fragments), binsize = 5000, genome = genome.lengths, process_n = 5000)
+```
+
+```{r Create chromatinassays}
+repl0.chr.assay <- CreateChromatinAssay(counts = repl0.feature.matrix, fragments = list(repl0.fragments), genome = Seqinfo(genome="mm10"), ranges = StringToGRanges(rownames(repl0.feature.matrix)))
+
+repl1.chr.assay <- CreateChromatinAssay(counts = repl1.feature.matrix, fragments = list(repl1.fragments), genome = Seqinfo(genome="mm10"), ranges = StringToGRanges(rownames(repl1.feature.matrix)))
+
+repl2.chr.assay <- CreateChromatinAssay(counts = repl2.feature.matrix, fragments = list(repl2.fragments), genome = Seqinfo(genome="mm10"), ranges = StringToGRanges(rownames(repl2.feature.matrix)))
+```
+
+```{r Create Seurat objects}
+repl0.metadata <- as.data.frame(dplyr::filter(repl0.0.singlecell, is__cell_barcode == 1))
+rownames(repl0.metadata) <- repl0.metadata$barcode
+
+repl1.metadata <- as.data.frame(dplyr::filter(repl1.1.singlecell, is__cell_barcode == 1))
+rownames(repl1.metadata) <- repl1.metadata$barcode
+
+repl2.metadata <- as.data.frame(dplyr::filter(repl2.2.singlecell, is__cell_barcode == 1))
+rownames(repl2.metadata) <- repl2.metadata$barcode
+
+repl0.s.data <- CreateSeuratObject(
+  counts = repl0.chr.assay,
+  assay = 'clade_peaks',
+  project = 'ATAC',
+  meta.data = repl0.metadata
+)
+
+repl1.s.data <- CreateSeuratObject(
+  counts = repl1.chr.assay,
+  assay = 'clade_peaks',
+  project = 'ATAC',
+  meta.data = repl1.metadata
+)
+
+repl2.s.data <- CreateSeuratObject(
+  counts = repl2.chr.assay,
+  assay = 'clade_peaks',
+  project = 'ATAC',
+  meta.data = repl2.metadata
+)
+```
+
+```{r Merge biological replicates}
+repl0.s.data$replicate <- '_0'
+repl1.s.data$replicate <- '_1'
+repl2.s.data$replicate <- '_2'
+
+system.time(s.data.merged <- merge(x = repl0.s.data, y = list(repl1.s.data, repl2.s.data), add.cell.ids = c("_0","_1", "_2")))
+```
+
+```{r}
+saveRDS(s.data.merged,paste("../scATAC_data/",sample.name,".merged.clade.phase.",run.date,".Rds", sep=""))
+```
+
