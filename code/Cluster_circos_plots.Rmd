@@ -211,18 +211,22 @@ writexl::write_xlsx(supp.table.5, path="/Users/kilpinen/OneDrive - University of
 
 ```{r Draw combination average Featureplots}
 DefaultAssay(s.data.e14) <- "RNA_name"
-pdf(height = 24, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Combiroc_avg_plots",run.date,".pdf",sep=""), onefile = TRUE)
+pdf(height = 12, width = 6, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Combiroc_avg_plots",run.date,".pdf",sep=""), onefile = TRUE)
   for (cl in seq(1,189,by=1)){
     gene.combo.str <- str_replace(combos.per.cluster[[cl]], pattern = "Nkx2,1", replacement = "Nkx2-1") %>% str_replace(pattern = "Nkx2,1,4", replacement = "Nkx2-1,Nkx2-4") %>% str_replace(pattern = "Mir124,2hg", replacement = "Mir124-2hg") %>% str_replace(pattern = "Mir124a,1hg", replacement = "Mir124a-1hg")
     genes.to.plot <- unlist(str_split(gene.combo.str,pattern = ","))
     if (!any(genes.to.plot=="Not found")){
-      tmp.data <- rowMeans(FetchData(s.data.e14,vars = genes.to.plot))
-      s.data.tmp <- AddMetaData(s.data.e14, metadata = tmp.data, col.name = "comb.avg")
+      tmp.data <- FetchData(s.data.e14,vars = genes.to.plot)
+      gene.thr <- apply(tmp.data,2,function(q){quantile(q,.95)})
+      above.thr <- sweep(tmp.data,2,gene.thr,">")
+      tmp.data[!above.thr] <- 0
+      cell.means <- rowMeans(tmp.data)
+      s.data.tmp <- AddMetaData(s.data.e14, metadata = cell.means, col.name = "comb.avg")
       cluster.name <- as.character(cl-1)
-      f.p <- FeaturePlot(s.data.tmp, features = "comb.avg", min.cutoff = "q5") + ggtitle(paste("Cluster ",cluster.name, sep = "")) + coord_fixed()
+      f.p <- FeaturePlot(s.data.tmp, features = "comb.avg", min.cutoff = "q5") + coord_fixed() + ggtitle(paste(genes.to.plot, collapse = ", ")) + theme(plot.title = element_text(size = 12))
       cell.colors <- rep("Gray",189)
       cell.colors[cl] <- "Red"
-      d.p <- DimPlot(s.data.e14, label = FALSE, cols=cell.colors) + theme(legend.position = "none") + coord_fixed()
+      d.p <- DimPlot(s.data.e14, label = FALSE, cols=cell.colors) + theme(legend.position = "none") + coord_fixed() + ggtitle(paste("Cluster ",cluster.name, sep = ""))
       comb.plto <- cowplot::plot_grid(f.p, d.p, ncol = 1, nrow = 2, align = "h")
       print(comb.plto)
   }
