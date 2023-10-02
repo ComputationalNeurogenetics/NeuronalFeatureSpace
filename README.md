@@ -4,10 +4,10 @@ This is repository for code used in the manuscript "Neuron types in the developi
 
 Main steps to reproduce analysis are described below. Use Conda envs r411_291021 for step 1, and then r421 for steps after that. ViaEnv for VIA analysis.
 
-1) Run JointFeatureSpace_220622.Rmd to create joint featurespace.
-2) Run R14_scRNA_071222.Rmd to merge and process scRNA samples together.
-3) Run E14_clade_peaks_joint_space_290822.Rmd to read scATAC data from fragements files based on joint featurespace, replicates are first merged and then brain regions. Data is QC filtered and binarized.
-4) Run e14_counts_to_downstream_290822.Rmd to perfom LSI, RNA integration, clustering resolution optimization and cluster marker detection for each modality.
+1) Run JointFeatureSpace_260723.Rmd to create common E14 ATAC featurespace.
+2) Run E14_scRNA_070923.Rmd to merge and process scRNA samples together.
+3) Run E14_clade_peaks_joint_space_280823.Rmd to read scATAC data from fragements files based on joint featurespace, replicates are first merged and then brain regions. Data is QC filtered and binarized.
+4) Run e14_counts_to_downstream_080923.Rmd to perfom LSI, RNA integration, clustering resolution optimization and cluster marker detection for each modality.
 
 Essential steps in e14_counts_to_downstream_071222.Rmd are as follows:
 1.	Read in both scATAC and scRNA data objects containing merged E14 data
