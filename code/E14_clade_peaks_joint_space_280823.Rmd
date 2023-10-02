@@ -1,5 +1,5 @@
 ---
-title: "R Notebook of E14 scATAC processing at clade level with pre-defined joint feature space"
+title: "R Notebook of E14 scATAC processing at clade level with pre-defined feature space"
 output: html_notebook
 ---
 
@@ -25,7 +25,7 @@ if(all(status)){
     status
 }
 
-source("../../generic code/AuxFunctions.R")
+source("AdditionalFunctions.R")
 ```
 
 ```{r Setting multicore/multisession}
@@ -37,7 +37,7 @@ plan("multisession", workers = 6)
 di.sample.name <- "E14DI1"
 r1.sample.name <- "E14vR1"
 mb.sample.name <- "E14VMB"
-run.date <- "298622"
+run.date <- "270723"
 ```
 
 ```{r Path to raw data}
@@ -47,7 +47,7 @@ r1.raw.path <- "/Volumes/MyBookDuo/Data/e14vr1_data/scATAC/"
 ```
 
 ```{r Reading predefined feature space}
-clade.peaks <- readRDS("../../NeuronalFeatureSpace/analysis/joint.clade.peaks.180622.Rds")
+clade.peaks <- readRDS("../../NeuronalFeatureSpace/analysis/joint.clade.peaks.260723.Rds")
 ```
 
 # --- Data preprocessing and QC 
@@ -466,7 +466,7 @@ VlnPlot(
 )
 
 # Storing merged clade level object as it takes so long to form
-saveRDS(e14.s.data,paste("E14.merged.clade.phase.",run.date,".Rds",sep=""))
+saveRDS(e14.s.data,paste("../scATAC_data/E14.merged.clade.phase.",run.date,".Rds",sep=""))
 ```
 
 ```{r Filter based on biological QC values}

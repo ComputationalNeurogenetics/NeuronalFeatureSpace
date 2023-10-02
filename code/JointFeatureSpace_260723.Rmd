@@ -38,7 +38,6 @@ source("AdditionalFunctions.R")
 
 ```{r Setting multicore/multisession}
 options(parallelly.makeNodePSOCK.setup_strategy = "multisession", future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE)
-plan("multisession", workers = 6)
 ```
 
 ```{r Path to raw data}
@@ -466,14 +465,16 @@ fishers
 
 
 ```{r Intersect of feature space to ENCODE}
+s.data <- qread("../scATAC_data/E14_DownstreamReady.080923.RNA.pos.idents.qs", nthreads = 6)
 
+feature.space <- StringToGRanges(rownames(s.data))
 overlapping <- subsetByOverlaps(feature.space, Combined.brain.E14.cCREs, minoverlap = 1L)
 
 non.overlapping <- subsetByOverlaps(feature.space, Combined.brain.E14.cCREs, minoverlap = 1L, invert = TRUE)
 
 ```
 
-```{r Draw grouped barplot of feature space to ENCODE comparison, fig.height=6, fig.width=8}
+```{r Draw stacked barplot of feature space to ENCODE comparison, fig.height=6, fig.width=8}
 peakAnno.over <- annotatePeak(overlapping, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")
 
 peakAnno.non.over <- annotatePeak(non.overlapping, tssRegion=c(-3000, 3000),TxDb=edb, annoDb="org.Mm.eg.db")

@@ -1,5 +1,5 @@
 ---
-title: "E14DI1 scRNA analysis with process and parameters standardized with rV2 project"
+title: "E14 scRNA analysis with process and parameters standardized with rV2 project"
 output: html_notebook
 ---
 
@@ -9,10 +9,13 @@ library(tidyverse);
 library(ggplot2);
 library(future);
 library(org.Mm.eg.db);
-library(randomcoloR);
 library(DT);
 library(data.table);
 library(qs)
+library(readxl)
+library(ggsci)
+library(grid)
+library(randomcoloR)
 source("AdditionalFunctions.R");
 ```
 
@@ -23,7 +26,7 @@ options(future.globals.maxSize = 12 * 1024 ^ 3, future.rng.onMisuse="ignore")
 
 ```{r Setting variable}
 sample.name <- "E14"
-run.date <- "300822"
+run.date <- "070923"
 ```
 
 ```{r Reading datafiles and form Seurat objects - DI}
@@ -58,7 +61,7 @@ r1.feature.data.repl2 <- as.data.frame(setNames(fread("/Volumes/MyBookDuo/Data/e
   mb.repl1 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vmb1_data/scRNA/E14VMB_1_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
   mb.s.repl1 <- CreateSeuratObject(counts = mb.repl1, project = "MB")
 
-  mb.repl2 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vr1_data/scRNA/E14vR1_2_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
+  mb.repl2 <- Read10X(data.dir = "/Volumes/MyBookDuo/Data/e14vmb1_data/scRNA/E14VMB_2_RNA/outs/filtered_feature_bc_matrix/", gene.column = 1)
   mb.s.repl2 <- CreateSeuratObject(counts = mb.repl2, project = "MB")
 ```
 
@@ -74,7 +77,10 @@ s.data_RNA<- merge(x = di.s.repl1, y = list(di.s.repl2,r1.s.repl1, r1.s.repl2, m
 
 ```{r Adding feature metadata after merge}
 # Note, assumes identical feature metadata between replicates
-s.data_RNA[['RNA']] <- AddMetaData(object = s.data_RNA[['RNA']], metadata = di.feature.data.repl1[,2], col.name="feature_symbol")
+gene.ii <- match(rownames(s.data_RNA), di.feature.data.repl1[,1])
+gene.symbols <- di.feature.data.repl1[gene.ii,2]
+
+s.data_RNA[['RNA']] <- AddMetaData(object = s.data_RNA[['RNA']], metadata = gene.symbols, col.name="feature_symbol")
 ```
 
 ```{r Remove TDTOMATOG}
@@ -89,15 +95,15 @@ mt.features <- rownames(s.data_RNA[grep("^MT-", feature.map, ignore.case = T)])
 s.data_RNA[["percent.mt"]] <- PercentageFeatureSet(s.data_RNA, features = mt.features)
 ```
 
-```{r Plot nFeature_RNA and mitochondrial genes per cell before filtering}
+```{r Plot nFeature_RNA and mitochondrial genes per cell before filtering, fig.height=6, fig.width=10}
 VlnPlot(s.data_RNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 ```
 
 ```{r Filtering likely cell doublets and noise}
-s.data_RNA <- subset(s.data_RNA, subset = nFeature_RNA > 2800 & nFeature_RNA < 5800 & percent.mt < 15)
+s.data_RNA <- subset(s.data_RNA, subset = nFeature_RNA > 2500 & nFeature_RNA < 6000 & percent.mt < 15)
 ```
 
-```{r Plot nFeature_RNA and mitochondrial genes per cell after filtering}
+```{r Plot nFeature_RNA and mitochondrial genes per cell after filtering,fig.height=6, fig.width=10}
 VlnPlot(s.data_RNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 ```
 
@@ -134,50 +140,50 @@ ElbowPlot(s.data_RNA, ndims=50)
 
 ```{r Calculate how many dimensions to take}
 std.aim <- 0.15
-std.proportion <- sapply(1:length(s.data_RNA@reductions$pca@stdev),function(x){s.data_RNA@reductions$pca@stdev[x]/s.data_RNA@reductions$pca@stdev[2]})
+std.proportion <- sapply(1:length(s.data_RNA@reductions$pca@stdev),function(x){s.data_RNA@reductions$pca@stdev[x]/s.data_RNA@reductions$pca@stdev[1]})
 
 # Finding number of components of which std proportion to 2nd component is closest to std.aim
-max.lsi.dim <- which.min(abs(std.proportion-std.aim))
+max.pca.dim <- which.min(abs(std.proportion-std.aim))
 ```
 
 ```{r RunUMAP}
-s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:max.lsi.dim, spread=1.5)
+s.data_RNA <- RunUMAP(s.data_RNA, dims = 1:max.pca.dim, spread=1)
 ```
 
 ```{r Save data for chooseR interation}
-qsave(s.data_RNA, file="../scRNA_data/E14_scRNA_for_chooseR.qs", nthreads = 6)
+qsave(s.data_RNA, file=paste("../scRNA_data/E14_scRNA_for_chooseR.",run.date,".qs",sep=""), nthreads = 6)
 # Using script choose_R_server_side.R 
 # Summarize results with chooseR_results.R
 # Continue with selected r value
+s.data_RNA <- qread(file="../scRNA_data/E14_scRNA_for_chooseR.010823.qs", nthreads = 6)
 ```
 
 
 ```{r Find neighbours and clusters, message=FALSE}
 reduction <- "pca"
 assay <- "RNA"
-resolution <- 3
-algorithm <- 4
-random.seed <- 2020
+resolution <- 5
+algorithm <- 1
 s.data_RNA <- Seurat::FindNeighbors(
     s.data_RNA,
-    dims = 1:max.lsi.dim,
-    graph.name = c(paste("N",reduction, assay, sep = "."),paste("S",reduction, assay, sep = "."))
+    dims = 1:max.pca.dim,
+    graph.name = c(paste("N",reduction, assay, sep = "."))
 )
 
 s.data_RNA <- Seurat::FindClusters(
     s.data_RNA,
 	algorithm = algorithm,
     resolution = resolution,
-	random.seed = random.seed,
-    graph.name = paste("S",reduction, assay, sep = "."),
+	method="igraph",
+    graph.name = paste("N",reduction, assay, sep = "."),
     verbose = FALSE
   )
 
 ```
 
 ```{r Draw DimPlot, fig.height=10, fig.width=10}
-palette <- distinctColorPalette(length(levels(Idents(s.data_RNA))))
-DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette) + coord_fixed()
+palette <- ggsci::pal_npg()(length(levels(Idents(s.data_RNA))))
+DimPlot(s.data_RNA, reduction = "umap", label = TRUE) + coord_fixed() + theme(legend.pos="none")
 ```
 
 ```{r Some validation plots, fig.height=24, fig.width=18}
@@ -205,8 +211,8 @@ s.data_RNA<-RenameGenesSeurat(s.data_RNA,s.data_RNA[["RNA"]]@meta.features[,1])
 DefaultAssay(s.data_RNA) <- 'RNA_name'
 
 mouse.cc.genes <- read_xlsx("../metadata/Mouse_S_and_G2m_genes_KA.xlsx", sheet = "Sheet2")
-mouse.g2m.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="G2m") %>% pull(gene_name)
-mouse.s.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="S") %>% pull(gene_name)
+mouse.g2m.genes <- dplyr::filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="G2m") %>% pull(gene_name)
+mouse.s.genes <- dplyr::filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="S") %>% pull(gene_name)
 
 #Creating scores for artificial genes: s & g2m 
 s.data_RNA <- CellCycleScoring(
@@ -251,17 +257,15 @@ s.data_RNA <- AddMetaData(object = s.data_RNA, metadata = str_extract(colnames(s
 ```
 
 ```{r Draw DimPlot with NT-types, fig.height=10, fig.width=10}
-run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_NT_type_UMAP_",run.time,".pdf",sep=""))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_NT_type_UMAP.",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
-palette <- distinctColorPalette(length(unique(s.data_RNA$NT.type)))
-DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "NT.type") + coord_fixed() + ggtitle("")
+palette <- ggsci::pal_igv()(length(unique(s.data_RNA$NT.type)))
+DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "NT.type", shuffle = TRUE) + coord_fixed() + ggtitle("")
 dev.off()
 ```
 
 ```{r Draw DimPlot with cluster numbers, fig.height=10, fig.width=10}
-run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_",run.time,".pdf",sep=""))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP.",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
 palette <- distinctColorPalette(length(levels(Idents(s.data_RNA))))
 DimPlot(s.data_RNA, reduction = "umap", label = TRUE, cols = palette) + coord_fixed() + ggtitle("") + NoLegend()
@@ -269,13 +273,37 @@ dev.off()
 ```
 
 ```{r Draw DimPlot with brain region, fig.height=10, fig.width=10}
-run.time <- format(Sys.time(), "%d-%m-%y_%Hh%Mmin")
-pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_brain_region_",run.time,".pdf",sep=""))
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_brain_region.",run.date,".pdf",sep=""))
 pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
-palette <- distinctColorPalette(length(unique(s.data_RNA$brain_region)))
+palette <- ggsci::pal_igv()(length(unique(s.data_RNA$brain_region)))
 DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "brain_region") + coord_fixed() + ggtitle("")
 dev.off()
 ```
+
+```{r Draw QC DimPlot with replicates separated}
+replicates <- str_extract(colnames(s.data_RNA), pattern = "^.*replt?[:digit:]+")
+s.data_RNA <- AddMetaData(s.data_RNA, metadata = replicates, col.name = "replicates")
+
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_replicates.",run.date,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+palette <- ggsci::pal_igv()(length(unique(s.data_RNA$replicates)))
+DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "replicates", shuffle = TRUE) + coord_fixed() + ggtitle("")
+dev.off()
+```
+
+```{r Draw QC DimPlot with embryo info}
+embryo <- rep("",ncol(s.data_RNA))
+embryo[replicates %in% c("di.repl1","mb.repl1","r1.repl1")] <- "embryo1"
+embryo[replicates %in% c("di.repl2","mb.repl2","r1.repl2")] <- "embryo2"
+s.data_RNA <- AddMetaData(s.data_RNA, metadata = embryo, col.name = "embryo")
+
+pdf(height = 8, width = 8, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scRNA_UMAP_embryo.",run.date,".pdf",sep=""))
+pushViewport(viewport(gp = gpar(fontfamily = "Helvetica")))
+palette <- ggsci::pal_igv()(length(unique(s.data_RNA$embryo)))
+DimPlot(s.data_RNA, reduction = "umap", label = FALSE, cols = palette, group.by = "embryo") + coord_fixed() + ggtitle("")
+dev.off()
+```
+
 
 ```{r Find all markers}
 all.markers <- tibble(FindAllMarkers(s.data_RNA, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25))
@@ -283,7 +311,7 @@ all.markers <- tibble(FindAllMarkers(s.data_RNA, only.pos = TRUE, min.pct = 0.25
 
 ```{r Filter top 2 markers}
 top2.markers <-all.markers %>% group_by(cluster) %>% top_n(n = 2, wt = avg_log2FC)
-top2.markers$feature_symbol <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = pull(top2.markers, gene), feature.format = "ens")
+#top2.markers$feature_symbol <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = pull(top2.markers, gene), feature.format = "ens")
 create_dt(top2.markers)
 ```
 
@@ -293,7 +321,7 @@ Table of top 2 markers per cluster
 
 ```{r Find all markers with stricter parameters}
 top20.markers <- all.markers %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
-top20.markers$feature_symbol <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = pull(top20.markers, gene), feature.format = "ens")
+#top20.markers$feature_symbol <- convert_feature_identity(object = s.data_RNA, assay = "RNA", features = pull(top20.markers, gene), feature.format = "ens")
 create_dt(top20.markers)
 ```
 
@@ -302,9 +330,8 @@ create_dt(top20.markers)
 Table of top 20 markers per cluster
 
 ```{r Saving Seurat object for further use}
-saveRDS(s.data_RNA, file = paste("../scRNA_data/",sample.name,"scRNAseq.",run.date,".Rds", sep=""))
+qsave(s.data_RNA, file = paste("../scRNA_data/E14_scRNAseq.",run.date,".qs", sep=""), nthreads = 6)
 ```
-
 
 ```{r sessionInfo}
 sessionInfo()
