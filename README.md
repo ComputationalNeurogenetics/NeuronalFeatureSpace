@@ -1,6 +1,6 @@
 # Neuron types in the developing mouse brain are divided into partially matching epigenomic and transcriptomic classes
 
-This is repository for code used in the manuscript "Neuron types in the developing mouse CNS can be divided into several epigenomic and transcriptomic classes" by Kilpinen et al.
+This is repository for code used in the manuscript "Neuron types in the developing mouse brain are divided into partially matching epigenomic and transcriptomic classes" by Kilpinen et al.
 
 Main steps to reproduce analysis are described below. Use Conda envs r411_291021 for step 1, and then r421 for steps after that. ViaEnv for VIA analysis.
 
