@@ -196,7 +196,7 @@ brain.regions.per.cluster.50 <- apply(brain.region.prop,2,function(i){
 brain.regions.per.cluster.50 <- tibble(cluster=as.numeric(names(brain.regions.per.cluster.50)), "top_brain_region"=brain.regions.per.cluster.50)
 ```
 
-```{r Process CombiROC results}
+```{r Process CombiROC results, warning=FALSE}
 combos <- readRDS("../analysis/ranked.combos_120923.Rds")
 combos.per.cluster <- lapply(combos, function(comb){pick.combo(comb$table)})
 
@@ -204,9 +204,30 @@ reliability.per.cluster <- tibble(cluster=as.numeric(as.character(Idents(s.data.
 
 supp.table <- tibble(cluster=seq(from=0,to=188,by=1), marker.comb=unlist(combos.per.cluster))
 
-supp.table.4 <- left_join(supp.table, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50) %>% left_join(reliability.per.cluster)
+supp.table.5 <- left_join(supp.table, nt.types.per.cluster.50) %>%  left_join(brain.regions.per.cluster.50) %>% left_join(reliability.per.cluster)
 
-writexl::write_xlsx(supp.table.4, path="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/4submission - Genome Biology/Revision_BMC/Tables/Supplementary table 4.xlsx")
+writexl::write_xlsx(supp.table.5, path="/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/4submission - Genome Biology/Revision_BMC/Tables/Supplementary table 5.xlsx")
+```
+
+```{r Draw combination average Featureplots}
+DefaultAssay(s.data.e14) <- "RNA_name"
+pdf(height = 24, width = 12, file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Combiroc_avg_plots",run.date,".pdf",sep=""), onefile = TRUE)
+  for (cl in seq(1,189,by=1)){
+    gene.combo.str <- str_replace(combos.per.cluster[[cl]], pattern = "Nkx2,1", replacement = "Nkx2-1") %>% str_replace(pattern = "Nkx2,1,4", replacement = "Nkx2-1,Nkx2-4") %>% str_replace(pattern = "Mir124,2hg", replacement = "Mir124-2hg") %>% str_replace(pattern = "Mir124a,1hg", replacement = "Mir124a-1hg")
+    genes.to.plot <- unlist(str_split(gene.combo.str,pattern = ","))
+    if (!any(genes.to.plot=="Not found")){
+      tmp.data <- rowMeans(FetchData(s.data.e14,vars = genes.to.plot))
+      s.data.tmp <- AddMetaData(s.data.e14, metadata = tmp.data, col.name = "comb.avg")
+      cluster.name <- as.character(cl-1)
+      f.p <- FeaturePlot(s.data.tmp, features = "comb.avg", min.cutoff = "q5") + ggtitle(paste("Cluster ",cluster.name, sep = "")) + coord_fixed()
+      cell.colors <- rep("Gray",189)
+      cell.colors[cl] <- "Red"
+      d.p <- DimPlot(s.data.e14, label = FALSE, cols=cell.colors) + theme(legend.position = "none") + coord_fixed()
+      comb.plto <- cowplot::plot_grid(f.p, d.p, ncol = 1, nrow = 2, align = "h")
+      print(comb.plto)
+  }
+  }
+dev.off()
 ```
 
 ```{r Calculate dendrogram of all clusters}

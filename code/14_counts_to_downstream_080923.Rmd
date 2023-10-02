@@ -1,0 +1,676 @@
+---
+title: "R Notebook of E14 downstream analysis from binarized peak level data with "
+output: html_notebook
+---
+# R Packages
+
+```{r Load packagies, include=FALSE}
+load.libs <- c(
+  "viridisLite",
+  "DT",
+  "GenomicRanges",
+  "data.table",
+  "plyr",
+  "gplots",
+  "magrittr",
+  "Matrix",
+  "proxy",
+  "qs",
+  "genomation",
+  "densityClust",
+  "irlba",
+  "umap",
+  "clusterProfiler",
+  "RColorBrewer",
+  "openxlsx",
+  "gridExtra",
+  "Signac",
+  "presto",
+  "Seurat",
+  "regioneR",
+  "reldist",
+  "SeuratWrappers",
+  "seriation",
+  "chromVAR",
+  "tidyverse",
+  "TFBSTools",
+  "BSgenome.Mmusculus.UCSC.mm10",
+  "EnsDb.Mmusculus.v79",
+  "org.Mm.eg.db",
+  "plotly",
+  "ggplotify",
+  "motifmatchr",
+  "future",
+  "circlize",
+  "cowplot",
+  "universalmotif",
+  "readxl",
+  "ComplexHeatmap",
+  "parallel")
+if (!require("pacman")) install.packages("pacman"); library(pacman)
+p_load(load.libs, update = FALSE, character.only = TRUE, install = FALSE)
+status <- sapply(load.libs,require,character.only = TRUE)
+if(all(status)){
+    print("SUCCESS: You have successfully installed and loaded all required libraries.")
+} else{
+    cat("ERROR: One or more libraries failed to install correctly. Check the following list for FALSE cases and try again...\n\n")
+    status
+}
+
+source("AdditionalFunctions.R")
+set.seed(2020);
+```
+
+# Reading datafiles
+
+```{r Setwd sample name specific variables, message=FALSE}
+sample.name <- "E14"
+run.date <- "080923"
+std.aim <- 0.15
+cores<-6
+```
+
+```{r Setting Seurat multicore}
+plan("multisession", workers = cores)
+options(future.globals.maxSize = 12 * 1024 ^ 3, future.seed=TRUE, future.rng.onMisuse="ignore")
+```
+
+```{r Reading scATAC data}
+s.data <- readRDS(paste("../scATAC_data/",sample.name,".merged.peaks.270723.Rds",sep=""))
+```
+
+```{r Add brain region information to metadata}
+s.data <- AddMetaData(object = s.data, metadata = str_extract(colnames(s.data), pattern = "[a-z]{2}_\\d{1}|[r1]{2}_\\d{1}"), col.name = "brain_region.replicate")
+s.data <- AddMetaData(object = s.data, metadata = str_extract(colnames(s.data), pattern = "[a-z]{2}|[r1]{2}"), col.name = "brain_region")
+```
+
+```{r TFIDF and SVD, message=FALSE}
+DefaultAssay(s.data) <- 'peaks'
+
+set.seed(2020)
+
+s.data <- RunTFIDF(s.data, method=3)
+s.data <- FindTopFeatures(s.data, min.cutoff = 'q5')
+s.data <- RunSVD(
+  object = s.data,
+  assay = 'peaks',
+  reduction.key = 'LSI_',
+  reduction.name = 'lsi',
+  n=60
+)
+```
+
+```{r Plot depth dimension correlation}
+DepthCor(s.data)
+```
+
+```{r Calculate proportion of stdebv covered by LSI components in comparison to 2}
+std.proportion <- sapply(2:length(s.data@reductions$lsi@stdev),function(x){s.data@reductions$lsi@stdev[x]/s.data@reductions$lsi@stdev[2]})
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim <- which.min(abs(std.proportion-std.aim))
+max.lsi.dim
+```
+
+```{r Save s.data fo gene activity estimation at HPC}
+qsave(s.data,file=paste("../scATAC_data/E14_for_gene_Activity",run.date,"qs",sep="."), nthreads = cores)
+```
+
+```{r RNA activity estimation & integration in HPC}
+# Run at HPC, please note that takes around 150GB of RAM
+# library(qs)
+# run.date<-"280823"
+# source("AdditionalFunctions.R")
+# s.data <- qread("../scATAC_data/E14_for_gene_Activity.250823.qs", nthreads = 12)
+# s.data.rna <- readRDS("../scRNA_data/E14scRNAseq.240823.Rds")
+# s.data <- doRNAintegration(scATAC.data=s.data, scRNA.data=s.data.rna, results.path=paste("../analysis/"), run.date=run.date, max.lsi.dim=59)
+```
+
+```{r Read and plot coembed data based on technology and cell type}
+coembed <- qread("../analysis/E14_coembed.280823.qs",nthreads = cores)
+
+p1 <- DimPlot(coembed, group.by = "tech", shuffle=TRUE)
+p2 <- DimPlot(coembed, group.by = "CellType", label = TRUE, repel = TRUE)  + theme(legend.position="none")
+
+p1 + p2
+```
+
+```{r Read integrated data}
+s.data <- qread("../analysis/E14_s.data.integrated.080923.qs", nthreads = 7)
+```
+
+```{r Plot prediction scores, echo=FALSE}
+pred.score.df <- data.frame(pred.score=s.data$prediction.score.max)
+ggplot(pred.score.df, aes(x=pred.score)) + geom_histogram(binwidth=.025) + geom_vline(data=pred.score.df, aes(xintercept=0.5, color="red"),linetype="dashed") + theme(legend.position = 'none')
+```
+
+```{r Calculate accepted prediction score fraction}
+prediction.score.over.th <- table(s.data$prediction.score.max > 0.5)
+p.freq <- prediction.score.over.th['TRUE']/(prediction.score.over.th['TRUE']+prediction.score.over.th['FALSE'])
+
+p.score.th <- as.numeric(prediction.score.over.th)
+val_names <- sprintf("%s (%s)", c("Match not found", "Match found"), scales::percent(round(p.score.th/sum(p.score.th), 2)))
+val_names
+```
+
+```{r Filtering Seurat data object based on prediction score for all downstream analysis}
+s.data <- subset(s.data, subset = prediction.score.max > 0.5)
+```
+
+```{r Storing old ident set}
+DefaultAssay(s.data) <- "peaks"
+s.data[['All_ATAC_idents']] <- Idents(s.data)
+```
+
+# Calculate NT typing for cells
+
+```{r NT typing preparation}
+source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
+source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
+
+NT.type.markers <- gene_set_prepare2("../metadata/onlyNT_markers311022.xlsx", "Brain")
+
+#Renaming genes as gene names instead of ENSMUSG IDs
+s.data<-RenameGenesSeurat(s.data,s.data[["RNA"]]@meta.features[,1])
+DefaultAssay(s.data) <- 'RNA_name'
+
+mouse.cc.genes <- read_xlsx("../metadata/Mouse_S_and_G2m_genes_KA.xlsx", sheet = "Sheet2")
+mouse.g2m.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="G2m") %>% pull(gene_name)
+mouse.s.genes <- filter(mouse.cc.genes, !is.na(`Progenitor marker`) & phase=="S") %>% pull(gene_name)
+
+#Creating scores for artificial genes: s & g2m 
+s.data <- CellCycleScoring(
+  object = s.data,
+  g2m.features = str_to_title(mouse.g2m.genes),
+  s.features = str_to_title(mouse.s.genes),
+  search=TRUE
+)
+
+#Getting the expression data from the seurat object
+exp.matr <- as.matrix(s.data[["RNA_name"]]@data)
+#Adding the two 'genes' in the end of the matrix
+matr <- rbind(exp.matr, s.data@meta.data$S.Score)
+rownames(matr)[nrow(matr)] <- "S"
+matr <- rbind(matr, s.data@meta.data$G2M.Score)
+rownames(matr)[nrow(matr)] <- "G2m"
+# scale the data 
+matr <- t(scale(t(matr)))
+```
+
+```{r Calculating NT type estimation per cell}
+# Getting cell-type by cell matrix.
+es.max <- sctype_score(scRNAseqData = matr, scaled = TRUE, gs = NT.type.markers$gs_positive, gs2 = NT.type.markers$gs_negative)
+
+cell.nt.types <- apply(es.max,2,function(score){
+  tmp.thr <- mean(score) + (1.3*sd(score))
+  if (max(score) > tmp.thr & max(score)>0){
+    cell.nt.type <- names(which.max(score))
+  } else {
+    cell.nt.type <- "unknown"
+  }
+  return(cell.nt.type)
+})
+
+s.data <- AddMetaData(object=s.data,metadata = apply(es.max,2,function(x){names(which.max(x))}), col.name = "NT.type.max")
+s.data <- AddMetaData(object=s.data,metadata = cell.nt.types, col.name = "NT.type")
+```
+
+# Recalculate TFIDF and UMAP
+
+```{r Recalculate TFIDF after scRNA mapping score subsetting}
+DefaultAssay(s.data) <- "peaks"
+
+s.data <- RunTFIDF(s.data, method=3)
+s.data <- FindTopFeatures(s.data, min.cutoff = 'q0')
+```
+
+```{r Recalculate proportion of stdebv covered by LSI components in comparison to 2}
+std.proportion <- sapply(2:length(s.data@reductions$lsi@stdev),function(x){s.data@reductions$lsi@stdev[x]/s.data@reductions$lsi@stdev[2]})
+
+# Finding number of components of which std proportion to 2nd component is closest to std.aim
+max.lsi.dim.re <- which.min(abs(std.proportion-std.aim))
+```
+
+```{r Recalculate UMAP after filtering cells based on RNA integration score}
+s.data <- RunUMAP(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim.re)
+s.data <- FindNeighbors(object = s.data, reduction = 'lsi', dims = 2:max.lsi.dim.re, graph.name = c("N.lsi.peaks"))
+```
+
+```{r Calculate optimal r with chooseR on HPC side}
+# Using script choose_R_server_side.R 
+# Summarize results with chooseR_results.R
+# Continue with selected r value
+qsave(s.data, file=paste("../analysis/E14_scATAC_integrated.",run.date,".qs",sep=""), nthreads = 6)
+
+# .libPaths(c("/projappl/project_2006402/r422_packages", .libPaths()))
+# libpath <- .libPaths()[1]
+# library(qs)
+# library(Seurat)
+# library(tidyverse)
+# source("AdditionalFunctions.R")
+# run.date<-"280823"
+# s.data <- qread(paste("../analysis/E14_scATAC_integrated.",run.date,".qs",sep=""), nthreads = 6)
+# doChooseR(obj=s.data,npcs=2:max.lsi.dim.re,resolutions=seq(1,20,by=1),assay="peaks",reduction="lsi",results_path=createDir("../analysis/results_E14_280823_scATAC_leiden/"),cores=10,method="igraph",algorithm=4,iterations=100)
+```
+
+```{r Calculate chooseR summary}
+doChooseRSummary(results_path="../analysis/results_E14_080923_scATAC_louvain_manual/",1:20)
+```
+
+```{r Recalculate community detection with chosen r, fig.height=16, fig.width=16}
+r <- 16
+suppressWarnings(s.data <- FindClusters(object = s.data, verbose = FALSE, algorithm = 1, resolution = r, method="igraph", reduction="lsi", graph.name = "N.lsi.peaks"))
+
+DimPlot(object = s.data, label = TRUE, pt.size=2, label.size = 6) + NoLegend() + coord_fixed()
+```
+
+```{r Read silhouette scores from HPC calculations}
+# Read silhouette scores from HPC calculations of cluster quality
+scores <- readRDS("../analysis/results_E14_080923_scATAC_louvain_manual/scores.rds")
+
+# Add cluster specific silhouette scores as metadata to s.data
+s.data <- AddMetaData(object = s.data, metadata = scores$avg_sil[match(as.numeric(s.data$N.lsi.peaks_res.5), scores$cluster)], col.name = "silh.score")
+create_dt(scores)
+```
+
+```{r Calculate confusion table with NT types and cluster labels}
+NT.conf.table <- table(s.data$seurat_clusters,s.data$NT.type)
+NT.purity<-sum(apply(NT.conf.table,1,function(x){max(x)}))/sum(NT.conf.table)
+create_dt(as.data.frame.matrix(NT.conf.table))
+```
+
+# Plot marker gene FeaturePlots with imputed scRNA data
+
+```{r Plot marker gene FeaturePlots with imputed scRNA data, fig.height=26, fig.width=20, message=FALSE}
+DefaultAssay(s.data) <- "RNA_name"
+
+first.row <- c("Sox2","Sox2","Nkx2-1", "Otx2")
+second.row <- c("Ascl1","Gad1","Gad2","Slc32a1")
+third.row <- c("Gata2","Tal1","Lhx6","Dlx1")
+fourth.row <- c("Lmx1a","Ddc","Th","Slc18a2")
+fifth.row <- c("Dbh","Isl1","Chat","Slc6a4")
+sixth.row <- c("Neurog2","Pou4f1","Gls","Slc17a6")
+
+first.row.plots <- FeaturePlot(
+  object = s.data,
+  features = c(first.row),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  combine = T, ncol = 4
+) & coord_fixed()
+
+second.row.plots <- FeaturePlot(
+  object = s.data,
+  features = c(second.row),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  combine = T, ncol = 4
+) & coord_fixed()
+
+third.row.plots <- FeaturePlot(
+  object = s.data,
+  features = c(third.row),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  combine = T, ncol = 4
+) & coord_fixed()
+
+fourth.row.plots <- FeaturePlot(
+  object = s.data,
+  features = c(fourth.row),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  combine = T, ncol = 4
+) & coord_fixed()
+
+fifth.row.plots <- FeaturePlot(
+  object = s.data,
+  features = c(fifth.row),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  combine = T, ncol = 4
+) & coord_fixed()
+
+sixth.row.plots <- FeaturePlot(
+  object = s.data,
+  features = c(sixth.row),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  combine = T, ncol = 4
+)  & coord_fixed() 
+# sixth.row.plots <- lapply(sixth.row.plots, FUN = function(x) x + theme(plot.title = element_text(size = 12)))
+# sixth.row.plots <- patchwork::wrap_plots(sixth.row.plots, nrow=1)
+
+patched.plot <- patchwork::wrap_plots(first.row.plots,second.row.plots, third.row.plots,fourth.row.plots,fifth.row.plots,sixth.row.plots, nrow = 6) 
+
+patched.plot
+
+ggsave(file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Marker_featureplots_",run.date,".png",sep=""), width = 20, height = 26, device="png")
+```
+
+# Calculate Gini indeces of HK and neuronal marker genes
+
+```{r Plot gini index based validation of clustering effectiveness, message=FALSE}
+# Define a set of HK genes
+hk.genes <- c("RRN18S","Actb","Gapdh","Pgk1","Ppia","Rpl13a","Rplp0","Arbp","B2M","Ywhaz","Sdha","Tfrc","Gusb","Hmbs","Hprt1","Tbp")
+neuronal.markers<- read_tsv("../metadata/Neuronal_markers.tsv", col_names = c("annotation","geneName"))
+
+hk.genes.id <- convert_feature_identity(s.data, "RNA",features = hk.genes)
+neuronal.markers.id <- convert_feature_identity(s.data, "RNA",features = neuronal.markers$geneName)
+
+# Neuronal marker mean per cluster in Cusanovich data
+gene.i <- match(neuronal.markers.id,s.data[['RNA']]@data@Dimnames[[1]])
+gene.i<-gene.i[!is.na(gene.i)]
+barcode.clusters <- s.data@meta.data$seurat_clusters
+marker.matrix <- s.data[['RNA']]@data[gene.i,]
+marker.tb <- as_tibble(t(as.data.frame(marker.matrix)))
+marker.tb<-tibble(marker.tb,cluster=barcode.clusters)
+marker.mean <- list()
+marker.mean$mean.by.cluster <- marker.tb %>% group_by(cluster) %>% summarize_all(mean)
+
+# HK gene mean per cluster in Cusanovich data
+gene.i <- match(hk.genes.id,s.data[['RNA']]@data@Dimnames[[1]])
+gene.i<-gene.i[!is.na(gene.i)]
+barcode.clusters <- s.data@meta.data$seurat_clusters
+marker.matrix <- s.data[['RNA']]@data[gene.i,]
+marker.tb <- as_tibble(t(as.data.frame(marker.matrix)))
+marker.tb<-tibble(marker.tb,cluster=barcode.clusters)
+hk.mean <- list()
+hk.mean$mean.by.cluster <- marker.tb %>% group_by(cluster) %>% summarize_all(mean)
+
+# Gini indeces for Cusanovich data
+cus.hk.gini <- apply(hk.mean$mean.by.cluster[,-1],2,gini)
+cus.neur.gini <- apply(marker.mean$mean.by.cluster[,-1],2,gini)
+
+gini.tb<-tibble(gini.index=c(cus.hk.gini,cus.neur.gini),type=c(rep("hk",length(cus.hk.gini)),rep("neur",length(cus.neur.gini)))) %>%  dplyr::filter(!is.na(gini.index))
+
+#ggplot(gini.tb, aes(x=gini.index,y=type,fill="blue"))+geom_boxplot(fill="lightblue")+ theme(legend.position="none") + theme_classic() + theme(text=element_text(size=16))
+gini.tb %>% group_by(type) %>% summarize(avg=mean(gini.index))
+```
+
+# Calculate pairwise DA chromating between all pairs of clusters
+
+```{r Calculate with DA_features_pairwise.R in HPC cluster}
+qsave(s.data, file="../analysis/s.data.res16.qs", nthreads = 6)
+```
+
+```{r Read & Filter DA features from HPC data}
+# Read results
+da_features <- qread("../scATAC_data/da_features_9.qs", nthreads = 6)
+
+da_bp <- lapply(da_features,function(da.1){
+  mclapply(da.1, function(da.2){
+    if (is_tibble(da.2)){
+      filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
+      
+      if (length(filt.da)>0){
+        filt.da <- sum(width(StringToGRanges(filt.da)))
+      } else {
+        filt.da <- 0
+      }
+    } else {
+      filt.da <- 0
+    }
+  }, mc.cores=6)
+})
+
+dalength.matrix <- sapply(da_bp, unlist)/1000
+rownames(dalength.matrix) <- as.character(seq(1,nrow(dalength.matrix),by=1))
+colnames(dalength.matrix) <- as.character(seq(1,ncol(dalength.matrix),by=1))
+```
+
+```{r Pairwise chromatin DA count}
+da_count <- lapply(da_features,function(da.1){
+  lapply(da.1, function(da.2){
+    if (is_tibble(da.2)){
+      filt.da <- da.2 %>% dplyr::filter((avg_log2FC > 0.75 | avg_log2FC < -0.75) & p_val_adj < 0.05) %>% pull(feature)
+      if (length(filt.da)>0){
+        filt.da <- length(filt.da)
+      } else {
+        filt.da <- 0
+      }
+    } else {
+      filt.da <- 0
+    }
+  })
+})
+
+dacount.matrix <- sapply(da_count, unlist)
+rownames(dacount.matrix) <- as.character(seq(1,nrow(dacount.matrix),by=1))
+colnames(dacount.matrix) <- as.character(seq(1,ncol(dacount.matrix),by=1))
+```
+
+```{r Draw clustered heatmap of pairwise DA results, fig.width=18, fig.height=18}
+col_fun = colorRamp2(c(0, median(dalength.matrix),max(dalength.matrix)), c("white","yellow", "red"))
+Heatmap(dalength.matrix, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),title="kbp",grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)), cluster_rows=TRUE, cluster_columns = TRUE)
+```
+
+```{r Histogram of DA feature chromatin kbp level}
+hist(dalength.matrix[upper.tri(dalength.matrix)], main = "Histogram of DA feature lengths between all clusters", xlab = "kbp")
+```
+
+```{r Histogram of DA feature count}
+hist(dacount.matrix[upper.tri(dacount.matrix)], main = "Histogram of DA feature counts between all clusters", xlab = "Feature count")
+```
+
+# Adding Motif information into the object
+
+```{r Adding Motif information to the object, echo=FALSE, message=FALSE}
+Hocomocov11 <- read_jaspar("../../mm10/HOCOMOCOv11_core_MOUSE_mono_jaspar_format.txt")
+names(Hocomocov11) <- lapply(Hocomocov11,function(x){x@name})
+Hocomocov11 <- convert_motifs(Hocomocov11, "TFBSTools-PWMatrix")
+PWMs <- do.call(PWMatrixList,Hocomocov11)
+DefaultAssay(s.data) <- "peaks"
+
+# add motif information
+s.data <- Signac::AddMotifs(
+  object = s.data,
+  genome = BSgenome.Mmusculus.UCSC.mm10,
+  pfm = PWMs
+)
+```
+
+```{r Run ChromVar and save data object}
+s.data <- RunChromVAR(
+  object = s.data,
+  genome = BSgenome.Mmusculus.UCSC.mm10
+)
+```
+
+```{r Find Closest features for ATAC features}
+DefaultAssay(s.data) <- "peaks"
+closest.features <- ClosestFeature(s.data, regions=rownames(s.data))
+saveRDS(closest.features,file=paste("../analysis/",sample.name,"_nmm_closest_features.",run.date,".Rds",sep=""))
+```
+
+# Identification of markers for clusters defined based on various modalities
+
+```{r Identification of UMAP cluster markers per RNA and ATAC, message=FALSE}
+DefaultAssay(s.data) <- "RNA"
+markers_rna <- as_tibble(presto:::wilcoxauc.Seurat(X = s.data, group_by = "seurat_clusters", assay = 'data', seurat_assay = 'RNA'))
+
+DefaultAssay(s.data) <- "peaks"
+markers_atac <- as_tibble(presto:::wilcoxauc.Seurat(X = s.data, group_by = "seurat_clusters", assay = 'data', seurat_assay = 'peaks'))
+
+markers.atac.annotated <- left_join(markers_atac, as_tibble(closest.features), by=c("feature"="query_region"))
+```
+
+```{r Find markers for clusters based on chromvar, message=FALSE}
+DefaultAssay(s.data) <- "chromvar"
+markers_chromvar <- as_tibble(FindAllMarkers(
+  object = s.data,
+  only.pos = TRUE,
+  test.use = 'LR',
+  latent.vars = 'nCount_peaks'
+)) %>% filter(p_val_adj <= 0.01 & avg_log2FC >= 0.75)
+```
+
+```{r Finding overrepresented motifs among markers_atac features, message=FALSE}
+DefaultAssay(s.data) <- "peaks"
+motif.markers <- markers.atac.annotated %>% filter(logFC > 0.5 & padj <= 0.01) %>% group_by(group) %>% select(feature, group) %>% group_modify(~FindMotifs(object=s.data, features=.x$feature)) %>% filter(pvalue <= 0.01 & fold.enrichment >= 1.5)
+```
+
+```{r Calculating top markers for each modality}
+top.markers_rna <- as_tibble(markers_rna) %>% dplyr::filter(padj <= 0.01) %>% group_by(group) %>% top_n(n = 25, wt = logFC)
+
+top.markers_rna$feature_symbol <- convert_feature_identity(s.data, "RNA", feature.format="ens", features = pull(top.markers_rna,feature))
+
+top.markers_atac <- as_tibble(markers.atac.annotated) %>% dplyr::filter(padj <= 0.01) %>% group_by(group) %>% top_n(n = 25, wt = logFC)
+
+top.markers_chromvar <- as_tibble(markers_chromvar) %>% dplyr::filter(p_val_adj <= 0.01) %>% group_by(cluster) %>% top_n(n = 25, wt = avg_log2FC)
+
+top.markers_motifs <- as_tibble(motif.markers) %>% dplyr::filter(pvalue <= 0.01) %>% group_by(group) %>% top_n(n = 25, wt = fold.enrichment)
+
+save(list=c("top.markers_rna","top.markers_atac","top.markers_chromvar","top.markers_motifs","closest.features"), file=paste("../analysis/",sample.name,"_RNApos_ATAC_cluster_markers.",run.date,".RData", sep=""))
+```
+
+```{r Adding genotype info to the object}
+genotype <- ifelse(s.data$replicate %in% c("_di_0","_mb_0","_r1_0"), "Pax7cre, TdT", "WT")
+s.data <- AddMetaData(s.data, metadata = genotype, col.name = "genotype")
+```
+
+```{r Plotting genotype DimPlot}
+DefaultAssay(s.data) <- "peaks"
+DimPlot(s.data, group.by = "genotype", shuffle = TRUE)
+```
+
+```{r Plotting replicate DimPlot}
+DefaultAssay(s.data) <- "peaks"
+DimPlot(s.data, group.by = "replicate", shuffle = TRUE)
+```
+
+```{r Combined replicate genotype info DimPlot}
+pdf(file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/Replicate_Genotype_scATAC_UMAP.",run.date,".pdf",sep=""), width = 8, height = 6)
+s.data <- AddMetaData(s.data, metadata = paste(s.data$replicate,s.data$genotype,sep="_"), col.name = "repl.geno")
+DimPlot(s.data, group.by = "repl.geno", shuffle = TRUE) + labs(title = "Replicate/Genotype")
+dev.off()
+```
+
+```{r}
+frag.paths <- lapply(Fragments(s.data), function(x){x@path})
+frag.counts <- lapply(frag.paths,function(p){CountFragments(fragments = p)})
+frag.counts.cb.added <- lapply(1:length(frag.paths),function(f){
+  if(frag.paths[f]=="/Volumes/MyBookDuo/Data/e14di_data/scATAC/E14DI1_0/outs/fragments.filtered.tsv.gz"){
+    frag.counts[[f]][,"CB"] <<- paste("_di_0_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14di_data/scATAC/E14DI1_1/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_di_1_",frag.counts[[f]][,"CB"],sep="")
+    }  else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14di_data/scATAC/E14DI1_2/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_di_2_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14vr1_data/scATAC/E14vR1_0/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_r1_0_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14vr1_data/scATAC/E14vR1_1/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_r1_1_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14vr1_data/scATAC/E14vR1_2/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_r1_2_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14vmb1_data/scATAC/E14VMB_0/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_mb_0_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14vmb1_data/scATAC/E14VMB_1/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_mb_1_",frag.counts[[f]][,"CB"],sep="")
+    } else if (frag.paths[f]=="/Volumes/MyBookDuo/Data/e14vmb1_data/scATAC/E14VMB_2/outs/fragments.filtered.tsv.gz"){
+  frag.counts[[f]][,"CB"] <<- paste("_mb_2_",frag.counts[[f]][,"CB"],sep="")
+}
+  })
+  # str_remove(colnames(s.data), pattern = "^_[[:alpha:]]+[:digit:]*_[:digit:]_"))
+frag.counts.bind <- do.call("rbind",frag.counts)
+
+s.data <- AddMetaData(s.data, col.name = "frequency_count", frag.counts.bind[match(colnames(s.data),frag.counts.bind$CB),"frequency_count"])
+
+s.data <- FRiP(s.data, assay="peaks", total.fragments = "frequency_count", col.name = "FRiP", verbose = TRUE)
+
+create_dt(as_tibble(s.data@meta.data) %>% group_by(s.data$replicate) %>% summarise(median_frag_frac=median(FRiP)))
+```
+
+
+# Saving data for downstream analyses
+
+```{r Saving data for downstream analyses}
+qsave(s.data,paste("../scATAC_data/",sample.name,"_DownstreamReady.",run.date,".RNA.pos.idents.qs",sep=""), nthreads = 6)
+#qsave(transfer.anchors,paste("../scATAC_data/",sample.name,"_transfer.anchors.",run.date,".qs",sep=""), nthreads = 6)
+```
+
+# Tables
+
+```{r Cross tabulation between scATAC and scRNA based clustering}
+scATAC.clusters <- Idents(s.data)
+scRNA.clusters <- s.data@meta.data$predicted.id
+
+conf.mat <- table(as.factor(scRNA.clusters),scATAC.clusters)
+scRNA.scATAC.purity<-sum(apply(conf.mat,1,function(x){max(x)}))/sum(conf.mat)
+create_dt(as.data.frame.matrix(conf.mat))
+```
+
+```{r Calculate NT type counts and proportions based on scATAC}
+nt.type.counts <- table(data.frame(Idents(s.data),s.data$NT.type))
+nt.type.prop <- apply(nt.type.counts,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+
+top_nt_type <- tibble(group=as.character(seq(from=0, to=ncol(nt.type.prop)-1)),top_nt_type=rownames(nt.type.prop)[apply(nt.type.prop,2,which.max)])
+```
+
+```{r Calculate NT type counts and proportions based on scRNA label transfer}
+nt.type.counts.scRNA.label <- table(data.frame(s.data$predicted.id,s.data$RNA.predicted.NT))
+nt.type.prop.scRNA.label <- apply(nt.type.counts.scRNA.label,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+
+```
+
+```{r Calculate brain region counts and proportions}
+brain.region.counts <- table(data.frame(Idents(s.data),s.data$brain_region))
+brain.region.prop <- apply(brain.region.counts,1,function(x){
+  if(sum(x)>0){
+    x/sum(x)
+    } else {x}
+  })
+
+top_brain_reg <- tibble(group=as.character(seq(from=0, to=ncol(brain.region.prop)-1)),top_brain_reg=rownames(brain.region.prop)[apply(brain.region.prop,2,which.max)])
+```
+
+```{r Correspondence scATAC to scRNA heatmap}
+conf.mat.numeric <- apply(as.matrix.noquote(conf.mat),2,as.numeric)
+o = seriate(conf.mat.numeric, method = "BEA_TSP")
+
+col_fun = colorRamp2(c(0, mean(conf.mat),max(conf.mat)), c("white","yellow", "darkgreen"))
+
+column_ha = HeatmapAnnotation(NT_type = anno_barplot(t(nt.type.prop),gp = gpar(fill = 1:8)), annotation_name_side = "left")
+
+row_ha = rowAnnotation(NT_type = anno_barplot(t(nt.type.prop.scRNA.label[,rownames(conf.mat)]),gp = gpar(fill = 1:8)), annotation_name_side = "top")
+
+lgd1 = Legend(labels = rownames(nt.type.prop), title = "NT type", legend_gp = gpar(fill = 1:8))
+lgd2 = Legend(col_fun=col_fun, title = "Cell count", at = c(0,50, 100, 150, 200, max(conf.mat)))
+
+#ht = Heatmap(conf.mat, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),title="Cell count",grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)), cluster_rows=TRUE, cluster_columns = TRUE, show_row_dend = FALSE, show_column_dend = FALSE, column_names_gp = gpar(fontsize = 8), row_names_gp = gpar(fontsize = 8), bottom_annotation = column_ha,  right_annotation = row_ha, show_heatmap_legend = FALSE)
+
+ht = Heatmap(conf.mat, col = col_fun, heatmap_legend_param = list(legend_height = unit(6, "cm"),title="Cell count",grid_width = unit(1, "cm"),labels_gp = gpar(col = "black", font = 20)),row_order = get_order(o, 1), column_order = get_order(o, 2), column_names_gp = gpar(fontsize = 8), row_names_gp = gpar(fontsize = 8), bottom_annotation = column_ha,  right_annotation = row_ha, show_heatmap_legend = FALSE)
+
+pdf(file=paste("/Users/kilpinen/OneDrive - University of Helsinki/Neuronal Feature Space/Figures/plots for figures/scATAC_vs_scRNA_NT_type_heatmap.",run.date,".pdf",sep=""), width = 25, height = 15)
+draw(ht,  padding = unit(c(0.1, 0.1, 0.1, 5), "cm"))
+pd = packLegend(lgd1, lgd2)
+draw(pd,  x = unit(1, "npc"), y = unit(0.5, "npc"), just = c("right", "top"))
+dev.off()
+```
+
+```{r Top 25 marker genes per scATAC cluster}
+top.markers_rna <- left_join(top.markers_rna, top_nt_type)
+top.markers_rna <- left_join(top.markers_rna, top_brain_reg)
+
+create_dt(as.data.frame.matrix(data.frame(top.markers_rna)))
+qsave(file = "../analysis/top25_RNA_marker.qs",x=as_tibble(data.frame(top.markers_rna)), nthreads = 6)
+```
+
+```{r NT-type vs brain region table}
+create_dt(as.data.frame.matrix(table(s.data$brain_region, s.data$NT.type)))
+```
+
+
+# Session info
+
+```{r sessionInfo}
+# conda env r421
+sessionInfo()
+```
