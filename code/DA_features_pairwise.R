@@ -5,8 +5,7 @@ library(Signac)
 library(parallel)
 
 setwd("/scratch/project_2001539/SAMI/NeuronalFeatureSpace/scATAC_data")
-#s.data.e14 <- qread("s.data.res3.8.qs", nthreads=20)
-s.data.e14 <- qread("s.data.res13.qs", nthreads=20)
+s.data.e14 <- qread("s.data.res16.qs", nthreads=20)
 
 
 DefaultAssay(s.data.e14) <- "peaks"
@@ -32,4 +31,4 @@ da_features <- lapply(all.cluster.idents, function(id.1){
   #return(unlist(da_counts))
 })
 
-qsave(da_features,"da_features_13.qs", nthreads = 20)
+qsave(da_features,"da_features_16.qs", nthreads = 20)
