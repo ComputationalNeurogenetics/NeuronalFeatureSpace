@@ -20,14 +20,14 @@ Essential steps in e14_counts_to_downstream_071222.Rmd are as follows:
 8.	Perform identification of neurotransmitter type per cell
 9.	Calculate UMAP and cluster detection optimization (separate HPC run code for optimization)
 10.	Pairwise differential chromatin accessibility calculations (Separate HPC run code)
-11.	Adding motif information to the object
-12.	Run ChromVar
-13.	Find Closest features for ATAC features
-14.	Identification of cluster markers (not actively used but included to the object for future research)
+11.	Adding motif information to the object (not actively used but included to the object for future research)
+12.	Run ChromVar (not actively used but included to the object for future research)
+13.	Find Closest features for ATAC features (not actively used but included to the object for future research)
+14.	Identification of cluster markers
 a.	Expression markers
 b.	scATAC feature markers
-c.	TF motif accessibility
-d.	TF motif enrichments
+c.	TF motif accessibility (not actively used but included to the object for future research)
+d.	TF motif enrichments (not actively used but included to the object for future research)
 
 Further downstream analyses are coded in ClusterCircosPlots.Rmd
 1. UMAP plots with clusters, brain region of origin and NT-types
@@ -37,6 +37,6 @@ Further downstream analyses are coded in ClusterCircosPlots.Rmd
 5. Draw clustered heatmap of pairwise DA feature differences
 6. Draw circlize plots of closest genes to DA features
 7. GO enrichement tests for closest genes
-8. Heatmap of top 3000 variable transcriptome of DI GABAergic clusters
+8. Heatmap of top 1400 variable transcriptome of DI GABAergic clusters
 9. Subsetting and exporting data for VIA analysis
 10. Draw ENCODE comparison VENN-diagrams
